@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
@@ -50,8 +49,9 @@ CONTROL_HTML = b"""<!doctype html><html><head><meta charset="utf-8">
   function refresh(){
     fetch('status', {cache:'no-store'}).then(function(r){return r.json();}).then(function(s){
       document.getElementById('go').disabled = !!s.busy;
-      document.getElementById('status').textContent =
-        (s.busy ? 'Fetching a new piece...' : (s.last_error ? ('Last error: ' + s.last_error) : 'Idle'))
+      var state = s.busy ? 'Fetching a new piece...'
+                : (s.last_error ? ('Last error: ' + s.last_error) : 'Idle');
+      document.getElementById('status').textContent = state
         + ' \\u2022 ' + s.tv_count + ' TV(s) \\u2022 every ' + s.interval_minutes
         + ' min \\u2022 last changed ' + fmt(s.last_ts);
       document.getElementById('now').innerHTML = s.title
@@ -81,7 +81,7 @@ def make_server(trigger: threading.Event, status: dict,
     debug = status.get("_debug", False)
 
     class Handler(BaseHTTPRequestHandler):
-        def log_message(self, fmt, *args):  # noqa: N802
+        def log_message(self, fmt, *args):
             if debug:
                 log.debug("%s - %s", self.address_string(), fmt % args)
 
@@ -93,7 +93,7 @@ def make_server(trigger: threading.Event, status: dict,
             if self.command != "HEAD":
                 self.wfile.write(body)
 
-        def do_POST(self):  # noqa: N802
+        def do_POST(self):
             if urlparse(self.path).path == "/next":
                 trigger.set()
                 log.info("manual 'show next' requested from control panel")
@@ -101,7 +101,7 @@ def make_server(trigger: threading.Event, status: dict,
             else:
                 self._send(404, "text/plain", b"not found")
 
-        def do_GET(self):  # noqa: N802
+        def do_GET(self):
             path = urlparse(self.path).path
             if path in ("/", ""):
                 self._send(200, "text/html; charset=utf-8", CONTROL_HTML)

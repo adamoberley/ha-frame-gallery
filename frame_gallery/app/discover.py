@@ -29,7 +29,7 @@ def discover_tv_hosts(explicit: str) -> list[str]:
         if not os.path.exists(path):
             continue
         try:
-            with open(path, "r", encoding="utf-8") as fh:
+            with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
         except (OSError, ValueError) as exc:
             log.warning("could not read %s: %s", path, exc)

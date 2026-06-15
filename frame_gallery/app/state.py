@@ -22,7 +22,7 @@ class History:
     def _load(self) -> list:
         if os.path.exists(STATE_PATH):
             try:
-                with open(STATE_PATH, "r", encoding="utf-8") as fh:
+                with open(STATE_PATH, encoding="utf-8") as fh:
                     return list(json.load(fh).get("recent", []))
             except (OSError, ValueError):
                 pass

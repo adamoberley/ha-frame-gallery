@@ -49,7 +49,7 @@ def pick(opts, history, sources, tries: int = 3):
         for src in srcs:
             try:
                 pool = src.candidates(opts, count=100)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("source %s failed: %s", src.name, exc)
                 continue
             cands = [a for a in pool

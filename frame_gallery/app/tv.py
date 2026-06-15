@@ -13,6 +13,7 @@ Only ids we uploaded are ever deleted.
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -40,7 +41,7 @@ class FrameTV:
     def _load_state(self) -> dict:
         if os.path.exists(self.state_file):
             try:
-                with open(self.state_file, "r", encoding="utf-8") as fh:
+                with open(self.state_file, encoding="utf-8") as fh:
                     data = json.load(fh)
                     data.setdefault("current_content_id", None)
                     data.setdefault("pending_deletes", [])
@@ -81,7 +82,7 @@ class FrameTV:
             try:
                 if str(art.get_artmode()).lower() == "off":
                     show = False
-            except Exception:  # noqa: BLE001
+            except Exception:
                 pass
             art.select_image(new_id, show=show)
             log.info("%s: uploaded + selected %s (show=%s)", self.host, new_id, show)
@@ -95,10 +96,8 @@ class FrameTV:
             self._drain_deletes(art, keep=new_id)
             return new_id
         finally:
-            try:
+            with contextlib.suppress(Exception):
                 tv.close()
-            except Exception:  # noqa: BLE001
-                pass
 
     def _drain_deletes(self, art, keep: str) -> None:
         still_pending = []
@@ -108,7 +107,7 @@ class FrameTV:
             try:
                 art.delete(cid)
                 log.info("%s: deleted previous art %s", self.host, cid)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("%s: delete of %s failed, will retry: %s", self.host, cid, exc)
                 still_pending.append(cid)
         self.state["pending_deletes"] = still_pending

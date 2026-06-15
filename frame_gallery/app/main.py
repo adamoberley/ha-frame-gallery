@@ -15,12 +15,11 @@ import threading
 import time
 from datetime import datetime
 
-import urllib3
-
 import discover
 import gallery
 import options as options_mod
 import server
+import urllib3
 from imaging import fit_to_panel
 from sources.artic import ArticSource
 from state import History
@@ -113,7 +112,7 @@ def main() -> int:
                 try:
                     tv.push(jpeg)
                     ok += 1
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     log.error("%s push failed: %s", tv.host, exc)
             history.add(art.key)
             status.update(title=art.title, artist=art.artist, credit=art.credit,
@@ -121,7 +120,7 @@ def main() -> int:
                           last_error=None if ok == len(tvs) else f"pushed to {ok}/{len(tvs)} TV(s)")
             log.info("showing '%s' by %s (%s) -> %d/%d TV(s)",
                      art.title, art.artist, art.credit, ok, len(tvs))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             status["last_error"] = str(exc)
             log.error("cycle failed (will retry): %s", exc)
         finally:

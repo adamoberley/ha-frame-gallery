@@ -31,7 +31,7 @@ class Options:
 def _load_raw() -> dict:
     if not os.path.exists(OPTIONS_PATH):
         return {}
-    with open(OPTIONS_PATH, "r", encoding="utf-8") as fh:
+    with open(OPTIONS_PATH, encoding="utf-8") as fh:
         return json.load(fh)
 
 

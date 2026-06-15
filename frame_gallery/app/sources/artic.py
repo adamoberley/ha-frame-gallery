@@ -14,7 +14,7 @@ import time
 
 import requests
 
-from sources.base import Artwork, ArtSource
+from sources.base import ArtSource, Artwork
 
 log = logging.getLogger("frame-gallery.artic")
 
