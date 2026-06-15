@@ -1,0 +1,10 @@
+# Plain Python base (Debian slim) - multi-arch, with manylinux wheels for
+# Pillow / websocket-client so there's nothing to compile. No Chromium needed.
+build_from:
+  aarch64: python:3.12-slim
+  amd64: python:3.12-slim
+  armv7: python:3.12-slim
+
+labels:
+  org.opencontainers.image.title: "Frame Gallery"
+  org.opencontainers.image.source: "https://github.com/adamoberley/ha-frame-gallery"

@@ -1,0 +1,51 @@
+# Labels + help shown on the app's Configuration tab.
+configuration:
+  tv_ip:
+    name: Frame TV IP(s)
+    description: >-
+      Leave blank to auto-discover every Frame from your Samsung TV integration.
+      Or enter one or more IPs, comma-separated, to override. First run shows an
+      "Allow connection?" prompt on each TV - accept it once with the remote.
+  interval_minutes:
+    name: Change interval (minutes)
+    description: How often a new piece is chosen and pushed to the TV.
+  resolution:
+    name: Panel resolution
+    description: 3840x2160 for 4K Frames (most); 1920x1080 for 32" / pre-2021.
+  query:
+    name: Art search
+    description: >-
+      Shape the collection with a free-text search, e.g. "landscape",
+      "impressionism", "ukiyo-e", "still life", "Monet". Blank pulls from the
+      whole public-domain catalogue.
+  public_domain_only:
+    name: Public domain only
+    description: >-
+      Only show CC0 / public-domain works (recommended - clean licensing for
+      display).
+  exclude_keywords:
+    name: Excluded keywords
+    description: >-
+      Comma-separated. Any work whose title/artist/tags contain one is skipped -
+      the family-safe filter. Blank to disable.
+  fit:
+    name: Fit
+    description: >-
+      How non-16:9 art fills the panel. "matte" frames it on a mat with nothing
+      cropped (like a print); "crop" fills the screen and trims the edges.
+  mat_color:
+    name: Mat color
+    description: Background colour behind matted art (hex). Dark hides glare at night.
+  active_hours:
+    name: Active hours
+    description: >-
+      Leave blank to change art 24/7, or set a local-time window like
+      07:00-23:00. Outside it the app idles and leaves the last piece up.
+  avoid_repeat_count:
+    name: No-repeat memory
+    description: >-
+      Don't repeat the last N pieces (0 = allow repeats). The fix for the old
+      art-changer showing the same things over and over.
+  log_level:
+    name: Log level
+    description: Set to debug to troubleshoot the art source or TV connection.

@@ -1,0 +1,6 @@
+# 3.0.5 = the maintained samsungtvws fork HA's own samsungtv integration uses;
+# its art API speaks the 2022+ Frames' protocol (older releases fail on them).
+samsungtvws==3.0.5
+websocket-client>=1.6,<2     # sync transport used by samsungtvws
+Pillow>=10.0
+requests>=2.31
