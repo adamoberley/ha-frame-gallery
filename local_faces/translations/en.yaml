@@ -19,6 +19,19 @@ configuration:
       "fast" downscales more before detection (lightest on a Pi); "accurate"
       keeps more detail to catch smaller or farther faces. Recognition itself
       always runs on the full-resolution aligned face.
+  recognition_model:
+    name: Recognition model
+    description: >-
+      "sface" is bundled and Apache-2.0 - the recommended default.
+      "mobilefacenet_w600k" (InsightFace) is smaller and more accurate, but its
+      weights are non-commercial/research-only, so you must supply the file
+      yourself (see Recognition model URL) and accept that license. Enrollments
+      are kept per-model, so switching back and forth is safe.
+  recognition_model_url:
+    name: Recognition model URL
+    description: >-
+      Direct URL to the chosen model's .onnx, used only if it isn't already in
+      /data/models. Needed for non-bundled models. Leave blank for "sface".
   detect_interval:
     name: Detection interval (seconds)
     description: How often a frame is analyzed. 1 second is plenty for a doorway.

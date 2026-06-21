@@ -91,6 +91,7 @@ PAGE = b"""<!doctype html><html><head><meta charset="utf-8">
       parts.push(s.faces+' face(s) now');
       parts.push(s.recognized ? ('recognized: '+s.recognized) : 'none recognized');
       parts.push(s.people+' enrolled');
+      if(s.model) parts.push('model: '+s.model);
       parts.push('MQTT '+(s.mqtt?'on':'off'));
       document.getElementById('status').textContent = parts.join(' \\u2022 ');
     }).catch(()=>{});

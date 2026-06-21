@@ -1,5 +1,19 @@
 # Changelog
 
+## Local Faces 0.2.0 — 2026-06-21
+
+- **Pluggable recognition model.** New `recognition_model` option: keep the
+  bundled, Apache-2.0 **SFace** (default), or switch to a stronger small embedder
+  such as InsightFace's **`mobilefacenet_w600k`** (smaller and more accurate, but
+  non-commercial license — you supply the `.onnx` via `recognition_model_url` or
+  `/data/models`, accepting its license).
+- ArcFace-style ONNX models run via `onnxruntime` with standard 5-point alignment
+  (new `align.py`); SFace keeps using OpenCV's built-in alignment. A shared
+  embedder interface (`embedders.py`) hides the difference from the rest of the app.
+- Enrollments are now **namespaced by model** in `faces.json`, so switching models
+  doesn't mix incompatible embeddings; v1 (SFace-only) files migrate automatically.
+- Dashboard status line shows the active recognition model.
+
 ## Local Faces 0.1.0 — 2026-06-21
 
 First release of a second add-on in this repository.

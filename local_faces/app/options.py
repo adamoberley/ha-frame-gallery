@@ -18,6 +18,8 @@ class Options:
     stream_url: str
     camera_mode: str
     mode: str
+    recognition_model: str
+    recognition_model_url: str
     detect_interval: float
     recognition_threshold: float
     min_face_size: int
@@ -53,6 +55,8 @@ def load() -> Options:
         stream_url=str(raw.get("stream_url", "")).strip(),
         camera_mode=str(raw.get("camera_mode", "stream")).strip() or "stream",
         mode=str(raw.get("mode", "balanced")).strip() or "balanced",
+        recognition_model=str(raw.get("recognition_model", "sface")).strip() or "sface",
+        recognition_model_url=str(raw.get("recognition_model_url", "")).strip(),
         detect_interval=float(raw.get("detect_interval", 1.0)),
         recognition_threshold=float(raw.get("recognition_threshold", 0.363)),
         min_face_size=int(raw.get("min_face_size", 60)),

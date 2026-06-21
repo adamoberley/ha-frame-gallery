@@ -50,7 +50,7 @@ class App:
     def __init__(self, opts) -> None:
         self.opts = opts
         self.engine = FaceEngine(opts)
-        self.db = FaceDB(opts.recognition_threshold)
+        self.db = FaceDB(opts.recognition_threshold, opts.recognition_model)
         self.reclog = RecognitionLog()
         self.camera = CameraSource(opts)
         self.mqtt = MqttPublisher(opts) if opts.enable_mqtt else None
@@ -68,6 +68,7 @@ class App:
             "people": 0,
             "last_ts": 0.0,
             "mode": opts.mode,
+            "model": opts.recognition_model,
             "mqtt": bool(self.mqtt),
             "stream_set": bool(opts.stream_url),
         }
