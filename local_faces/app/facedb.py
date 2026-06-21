@@ -1,10 +1,14 @@
 """Enrolled people: name -> one or more face embeddings, persisted in /data.
 
-Matching is the max cosine similarity over every enrolled sample (embeddings are
-already L2-normalized, so the dot product is the cosine). The best person wins if
-it clears the threshold; otherwise the face is "unknown". A small thumbnail per
-person is kept for the dashboard. Everything stays on disk in /data/faces.json -
-it never leaves the box.
+Embeddings from different recognition models aren't comparable (different spaces,
+even different dimensions), so enrollments are namespaced by model id: switching
+models shows that model's own people, and switching back keeps the originals -
+no re-enroll needed once you've done each model once.
+
+Matching is the max cosine similarity over a person's samples (vectors are
+L2-normalized, so the dot product is the cosine); the best person wins if it
+clears the threshold, else the face is "unknown". Everything stays on disk in
+/data/faces.json - it never leaves the box.
 """
 from __future__ import annotations
 
@@ -22,32 +26,41 @@ DB_PATH = "/data/faces.json"
 
 
 class FaceDB:
-    def __init__(self, threshold: float) -> None:
+    def __init__(self, threshold: float, model_id: str) -> None:
         self.threshold = threshold
+        self.model_id = model_id
         self._lock = threading.Lock()
-        self._emb: dict[str, np.ndarray] = {}   # name -> (k, 128) normalized
+        self._all: dict = {"version": 2, "models": {}}
+        self._emb: dict[str, np.ndarray] = {}   # name -> (k, dim) normalized
         self._thumb: dict[str, str] = {}         # name -> base64 jpeg
         self._load()
 
     def _load(self) -> None:
-        if not os.path.exists(DB_PATH):
-            return
-        try:
-            with open(DB_PATH, encoding="utf-8") as fh:
-                data = json.load(fh)
-        except (OSError, ValueError) as exc:
-            log.warning("could not read %s: %s", DB_PATH, exc)
-            return
-        for name, person in (data.get("people") or {}).items():
+        if os.path.exists(DB_PATH):
+            try:
+                with open(DB_PATH, encoding="utf-8") as fh:
+                    data = json.load(fh)
+            except (OSError, ValueError) as exc:
+                log.warning("could not read %s: %s", DB_PATH, exc)
+                data = {}
+            if "models" in data:
+                self._all = data
+                self._all.setdefault("models", {})
+            elif "people" in data:  # migrate v1 (SFace-only) layout
+                self._all = {"version": 2, "models": {"sface": {"people": data["people"]}}}
+                log.info("migrated existing enrollments to the 'sface' namespace")
+
+        people = (self._all["models"].get(self.model_id) or {}).get("people", {})
+        for name, person in people.items():
             vecs = np.array(person.get("embeddings", []), dtype="float32")
             if vecs.size:
                 self._emb[name] = vecs.reshape(-1, vecs.shape[-1])
                 self._thumb[name] = person.get("thumb", "")
-        log.info("loaded %d enrolled %s", len(self._emb),
-                 "person" if len(self._emb) == 1 else "people")
+        log.info("loaded %d enrolled %s for model '%s'", len(self._emb),
+                 "person" if len(self._emb) == 1 else "people", self.model_id)
 
     def _save(self) -> None:
-        data = {
+        self._all.setdefault("models", {})[self.model_id] = {
             "people": {
                 name: {"embeddings": self._emb[name].tolist(), "thumb": self._thumb.get(name, "")}
                 for name in self._emb
@@ -56,7 +69,7 @@ class FaceDB:
         tmp = DB_PATH + ".tmp"
         try:
             with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump(data, fh)
+                json.dump(self._all, fh)
             os.replace(tmp, DB_PATH)
         except OSError as exc:
             log.warning("could not persist faces: %s", exc)
@@ -95,6 +108,8 @@ class FaceDB:
         best_name, best = None, -1.0
         with self._lock:
             for name, vecs in self._emb.items():
+                if vecs.shape[-1] != embedding.shape[-1]:
+                    continue  # guard against any stale, wrong-dimension samples
                 score = float((vecs @ embedding).max())
                 if score > best:
                     best, best_name = score, name

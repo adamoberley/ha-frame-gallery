@@ -23,6 +23,38 @@ This is the open-source counterpart to the UltraFace + MobileFaceNet pairing —
 small, fast, and accurate enough for a front door or hallway. Placement and good
 enrollment photos matter more than the model.
 
+## Choosing a recognition model
+
+The embedder is pluggable via the **Recognition model** option:
+
+| Model | Size | Notes | License |
+| --- | --- | --- | --- |
+| `sface` *(default)* | ~37 MB | Bundled, auto-downloaded, zero setup | **Apache-2.0** — free to use |
+| `mobilefacenet_w600k` | ~3.4 MB | Smaller *and* more accurate (InsightFace buffalo_s, trained on WebFace600K) | **Non-commercial / research-only** |
+
+`sface` is the right choice for almost everyone — it's clean-licensed and works
+out of the box. Pick `mobilefacenet_w600k` only if you want the extra accuracy and
+are comfortable with its license.
+
+**Using a non-bundled model:** because of the license, Local Faces won't fetch it
+for you. Obtain `w600k_mbf.onnx` from the InsightFace `buffalo_s` release, then
+either:
+
+- drop the file at `/data/models/w600k_mbf.onnx` (e.g. via the *Samba*/*SSH*
+  add-on), or
+- set **Recognition model URL** to a direct link you control.
+
+Switching models is safe: **enrollments are kept per model**, so the first time
+you select a new model you'll re-enroll once, and switching back to a model you've
+used before restores its people. Note the optimal **Match threshold** differs by
+model — `sface` is good at `0.363`; for `mobilefacenet_w600k` start lower (around
+`0.3`) and tune.
+
+> Other strong tiny models exist (EdgeFace, GhostFaceNets). They're not included
+> because their pretrained weights also carry research-only licenses; any
+> ArcFace-style 112×112 ONNX model that outputs an embedding will work through the
+> `mobilefacenet_w600k` path if you point the URL at it.
+
 ## Setup
 
 1. **Install an MQTT broker** (the official *Mosquitto broker* add-on) if you

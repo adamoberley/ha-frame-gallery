@@ -6,7 +6,7 @@
 # HA as a sensor over MQTT; recognition, enrollment, and the log never leave the
 # box (only an optional push notification does).
 name: Local Faces
-version: "0.1.0"
+version: "0.2.0"
 slug: local_faces
 description: >-
   On-device, open-source face recognition. Enroll people from a dashboard;
@@ -39,6 +39,8 @@ options:
   stream_url: ""
   camera_mode: "stream"
   mode: "balanced"
+  recognition_model: "sface"
+  recognition_model_url: ""
   detect_interval: 1.0
   recognition_threshold: 0.363
   min_face_size: 60
@@ -60,6 +62,13 @@ schema:
   # Fast vs Accurate: smaller processing size = faster on a Pi; larger catches
   # smaller/farther faces. Recognition always uses the full-res aligned crop.
   mode: "list(fast|balanced|accurate)"
+  # Recognition model. "sface" is bundled (Apache-2.0). "mobilefacenet_w600k" is
+  # smaller and more accurate but has a non-commercial license, so you must supply
+  # the .onnx yourself (recognition_model_url or drop it in /data/models).
+  recognition_model: "list(sface|mobilefacenet_w600k)"
+  # URL to fetch the chosen model's .onnx if it isn't already in /data/models.
+  # Only needed for non-bundled models; you're accepting that model's license.
+  recognition_model_url: "str?"
   # Seconds between detections (how often a frame is analyzed).
   detect_interval: "float(0.2,30)"
   # Cosine match threshold; higher = stricter (fewer false matches, more misses).

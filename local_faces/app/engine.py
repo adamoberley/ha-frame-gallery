@@ -1,9 +1,9 @@
-"""Face detection + embedding on CPU, using OpenCV's bundled YuNet and SFace.
+"""Face detection + embedding on CPU.
 
-Detection runs on a downscaled frame (cheap on a Pi); recognition runs on the
-full-resolution aligned 112x112 crop SFace expects, so quality isn't lost. Each
-embedding is L2-normalized, so a cosine similarity is just a dot product - that's
-what FaceDB compares against enrolled people.
+Detection (YuNet) runs on a downscaled frame - cheap on a Pi. Embedding is
+delegated to a pluggable backend (see embedders.py): SFace by default, or an
+ArcFace-style ONNX model. Recognition always runs on the full-resolution face, so
+quality isn't lost to the detection downscale.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
+from embedders import build_embedder
 from models import ensure_models
 
 log = logging.getLogger("local-faces.engine")
@@ -24,22 +25,17 @@ class Face:
     w: int
     h: int
     score: float
-    embedding: np.ndarray  # (128,) float32, L2-normalized
-    thumb: bytes           # aligned 112x112 crop as JPEG
-
-
-def _encode_thumb(aligned: np.ndarray) -> bytes:
-    ok, buf = cv2.imencode(".jpg", aligned, [cv2.IMWRITE_JPEG_QUALITY, 85])
-    return buf.tobytes() if ok else b""
+    embedding: np.ndarray  # L2-normalized, dimensionality depends on the model
+    thumb: bytes           # aligned crop as JPEG
 
 
 class FaceEngine:
     def __init__(self, opts) -> None:
-        det_path, rec_path = ensure_models()
+        det_path, rec_path = ensure_models(opts)
         self.detector = cv2.FaceDetectorYN.create(
             det_path, "", (320, 320), opts.det_score_threshold, 0.3, 5000
         )
-        self.recognizer = cv2.FaceRecognizerSF.create(rec_path, "")
+        self.embedder = build_embedder(opts.recognition_model, rec_path)
         self.proc_width = opts.proc_width
         self.min_face = opts.min_face_size
         log.info("engine ready (proc_width=%d, min_face=%dpx)", self.proc_width, self.min_face)
@@ -66,12 +62,8 @@ class FaceEngine:
             x, y, fw, fh = (round(v) for v in row[:4])
             if fh < self.min_face:
                 continue
-            aligned = self.recognizer.alignCrop(frame, row)
-            feat = self.recognizer.feature(aligned).flatten().astype("float32")
-            norm = float(np.linalg.norm(feat))
-            if norm > 0:
-                feat = feat / norm
-            out.append(Face(x, y, fw, fh, float(row[14]), feat, _encode_thumb(aligned)))
+            embedding, thumb = self.embedder.embed(frame, row)
+            out.append(Face(x, y, fw, fh, float(row[14]), embedding, thumb))
         return out
 
     @staticmethod
