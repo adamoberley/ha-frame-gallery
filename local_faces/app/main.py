@@ -78,6 +78,7 @@ class App:
             "model": opts.recognition_model,
             "mqtt": bool(self.mqtt),
             "stream_set": bool(opts.stream_url),
+            "aspect": opts.preview_aspect,
         }
 
     # ---- lifecycle ---------------------------------------------------------

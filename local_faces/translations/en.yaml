@@ -13,6 +13,12 @@ configuration:
       "stream" reads a continuous RTSP/HTTP feed (lowest latency). "snapshot"
       polls a still-image URL every interval (lighter, good for cameras that only
       offer a snapshot endpoint).
+  preview_aspect:
+    name: Preview aspect ratio
+    description: >-
+      Shape of the live preview on the dashboard. "auto" matches your camera's
+      actual frame, so a portrait (9:16) doorbell fills correctly instead of being
+      cropped; or force 16:9, 9:16, 4:3, 3:4, or 1:1. Recognition is unaffected.
   mode:
     name: Speed vs accuracy
     description: >-

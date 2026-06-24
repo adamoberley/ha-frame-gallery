@@ -84,7 +84,7 @@ PAGE = b"""<!doctype html>
               box-shadow:inset 0 14px 30px -16px var(--accent); }
   .viewport.unknown::before { border-top-color:var(--alert);
               box-shadow:inset 0 14px 30px -16px var(--alert); }
-  .viewport img { width:100%; height:100%; object-fit:cover; display:block; }
+  .viewport img { width:100%; height:100%; object-fit:contain; display:block; }
   .scan { position:absolute; left:0; right:0; top:0; height:42%; z-index:2;
           background:linear-gradient(to bottom, transparent, rgba(224,162,76,.16));
           border-bottom:1px solid rgba(224,162,76,.5); opacity:0; }
@@ -260,6 +260,7 @@ PAGE = b"""<!doctype html>
 <script>
 (function(){
   var pendingToken = null;
+  var aspectMode = "auto";  // viewport shape: "auto" follows the camera frame
 
   function el(id){ return document.getElementById(id); }
   function setMsg(t, kind){ var m=el("msg"); m.textContent=t||"\\u00a0";
@@ -282,7 +283,14 @@ PAGE = b"""<!doctype html>
     var feed = el("feed");
     function tick(){
       var probe = new Image();
-      probe.onload = function(){ feed.src = probe.src; };
+      probe.onload = function(){
+        // In "auto" mode, size the viewport to the camera's real frame so a
+        // portrait (9:16) feed isn't cropped. Explicit ratios come from status.
+        if(aspectMode==="auto" && probe.naturalWidth && probe.naturalHeight){
+          el("viewport").style.aspectRatio = probe.naturalWidth+" / "+probe.naturalHeight;
+        }
+        feed.src = probe.src;
+      };
       probe.src = "preview.jpg?t=" + Date.now();
     }
     tick();
@@ -292,6 +300,8 @@ PAGE = b"""<!doctype html>
   function refreshStatus(){
     api("status").then(function(s){
       var vp=el("viewport");
+      if(s.aspect){ aspectMode = s.aspect;
+        if(aspectMode!=="auto"){ vp.style.aspectRatio = aspectMode.replace(":"," / "); } }
       vp.classList.toggle("no-feed", !s.camera_ok);
       vp.classList.toggle("watching", !!s.camera_ok);
       vp.classList.toggle("known", s.state==="known");

@@ -17,6 +17,7 @@ _MODE_WIDTH = {"fast": 320, "balanced": 480, "accurate": 720}
 class Options:
     stream_url: str
     camera_mode: str
+    preview_aspect: str
     mode: str
     recognition_model: str
     recognition_model_url: str
@@ -54,6 +55,7 @@ def load() -> Options:
     return Options(
         stream_url=str(raw.get("stream_url", "")).strip(),
         camera_mode=str(raw.get("camera_mode", "stream")).strip() or "stream",
+        preview_aspect=str(raw.get("preview_aspect", "auto")).strip() or "auto",
         mode=str(raw.get("mode", "balanced")).strip() or "balanced",
         recognition_model=str(raw.get("recognition_model", "sface")).strip() or "sface",
         recognition_model_url=str(raw.get("recognition_model_url", "")).strip(),

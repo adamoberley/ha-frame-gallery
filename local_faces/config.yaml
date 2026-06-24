@@ -6,7 +6,7 @@
 # HA as a sensor over MQTT; recognition, enrollment, and the log never leave the
 # box (only an optional push notification does).
 name: Local Faces
-version: "0.3.1"
+version: "0.3.2"
 slug: local_faces
 description: >-
   On-device, open-source face recognition. Enroll people from a dashboard;
@@ -38,6 +38,7 @@ hassio_api: true
 options:
   stream_url: ""
   camera_mode: "stream"
+  preview_aspect: "auto"
   mode: "balanced"
   recognition_model: "sface"
   recognition_model_url: ""
@@ -59,6 +60,9 @@ schema:
   # "stream" mode; a still-image snapshot URL for "snapshot" mode.
   stream_url: "str?"
   camera_mode: "list(stream|snapshot)"
+  # Dashboard preview shape. "auto" matches the camera's real frame (best for a
+  # portrait 9:16 doorbell); or force a ratio. Recognition is unaffected either way.
+  preview_aspect: "list(auto|16:9|9:16|4:3|3:4|1:1)"
   # Fast vs Accurate: smaller processing size = faster on a Pi; larger catches
   # smaller/farther faces. Recognition always uses the full-res aligned crop.
   mode: "list(fast|balanced|accurate)"
