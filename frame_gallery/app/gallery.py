@@ -17,7 +17,7 @@ import requests
 
 log = logging.getLogger("frame-gallery.gallery")
 
-_UA = {"User-Agent": "ha-frame-gallery/0.1 (+https://github.com/adamoberley/ha-frame-gallery)"}
+_UA = {"User-Agent": "ha-addons/0.1 (+https://github.com/adamoberley/ha-addons)"}
 
 
 def _blocked(art, keywords) -> bool:

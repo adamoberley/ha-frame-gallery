@@ -11,7 +11,7 @@ slug: local_faces
 description: >-
   On-device, open-source face recognition. Enroll people from a dashboard;
   recognized names show up in HA as a sensor. Runs on CPU - light enough for a Pi.
-url: https://github.com/adamoberley/ha-frame-gallery/tree/main/local_faces
+url: https://github.com/adamoberley/ha-addons/tree/main/local_faces
 
 # OpenCV + onnx wheels ship for 64-bit only; Pi 4/5 run a 64-bit OS (aarch64).
 arch:

@@ -11,7 +11,7 @@ slug: frame_gallery
 description: >-
   Curated public-domain art on your Samsung Frame TV, on an interval - museum
   APIs, content filtering, no repeats, replaced in place. No automation needed.
-url: https://github.com/adamoberley/ha-frame-gallery/tree/main/frame_gallery
+url: https://github.com/adamoberley/ha-addons/tree/main/frame_gallery
 
 # No Chromium here (we fetch finished images, not render), so all common
 # architectures are supported.

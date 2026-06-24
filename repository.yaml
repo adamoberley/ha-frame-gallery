@@ -2,5 +2,5 @@
 # Install: Settings -> Add-ons -> Add-on Store -> (top-right) Repositories ->
 # paste this repo's URL -> "Frame Gallery" appears under this name.
 name: Adam Oberley's Home Assistant Add-ons
-url: https://github.com/adamoberley/ha-frame-gallery
+url: https://github.com/adamoberley/ha-addons
 maintainer: Adam Oberley <adamoberley@damascus.net>

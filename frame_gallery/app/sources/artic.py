@@ -25,8 +25,8 @@ MAX_PAGE = 100            # offset cap (page*limit <= ~10000 per the AIC API)
 FIELDS = ("id,title,artist_title,image_id,is_public_domain,"
           "department_title,classification_titles,term_titles")
 HEADERS = {
-    "User-Agent": "ha-frame-gallery/0.1 (+https://github.com/adamoberley/ha-frame-gallery)",
-    "AIC-User-Agent": "ha-frame-gallery (adamoberley@damascus.net)",
+    "User-Agent": "ha-addons/0.1 (+https://github.com/adamoberley/ha-addons)",
+    "AIC-User-Agent": "ha-addons (adamoberley@damascus.net)",
 }
 
 

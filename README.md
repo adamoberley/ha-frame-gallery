@@ -33,9 +33,9 @@ the things that made them frustrating:
 
 1. **Settings → Add-ons → Add-on Store → ⋮ (top-right) → Repositories**, and add:
 
-   [![Add repository to your Home Assistant.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fadamoberley%2Fha-frame-gallery)
+   [![Add repository to your Home Assistant.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fadamoberley%2Fha-addons)
 
-   …or paste `https://github.com/adamoberley/ha-frame-gallery`.
+   …or paste `https://github.com/adamoberley/ha-addons`.
 2. Install **Frame Gallery** and **Start** it, with the TV **on** and the remote
    handy — accept the *"Allow connection?"* (and first-time **Art Store terms**)
    prompts on the TV.
