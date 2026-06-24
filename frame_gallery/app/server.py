@@ -18,24 +18,41 @@ PREVIEW_PATH = "/data/last.jpg"
 
 CONTROL_HTML = b"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Frame Gallery</title>
+<title>REFRAMED Gallery</title>
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; }
-  h1 { font-size: 1.25rem; margin: 0 0 4px; }
-  .sub { opacity:.7; font-size:.85rem; margin:0 0 18px; }
-  button { font: inherit; font-weight: 600; padding: 12px 20px; border: 0;
-           border-radius: 10px; background: #2f7; color: #042; cursor: pointer; }
-  button:disabled { opacity:.5; cursor: default; }
-  .status { margin: 14px 0; font-size: .9rem; min-height: 1.2em; }
-  .now { font-size: .95rem; margin: 6px 0 0; }
-  .now b { font-weight: 600; }
-  .frame { margin-top: 16px; border-radius: 8px; overflow: hidden; background:#0006;
-           aspect-ratio: 16/9; display: grid; place-items: center; }
-  .frame img { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .frame .empty { opacity:.5; font-size:.9rem; }
+  :root {
+    color-scheme: light dark;
+    --primary:#03a9f4; --bg:#f5f5f5; --card:#ffffff; --text:#212121;
+    --secondary:#727272; --divider:rgba(0,0,0,.12); --screen:#202124;
+    --shadow:0 2px 1px -1px rgba(0,0,0,.2),0 1px 1px 0 rgba(0,0,0,.14),0 1px 3px 0 rgba(0,0,0,.12);
+    --card-border:transparent;
+    --sans:Roboto,"Helvetica Neue",-apple-system,system-ui,"Segoe UI",Arial,sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111111; --card:#1c1c1c; --text:#e1e1e1; --secondary:#9b9b9b;
+            --divider:rgba(225,225,225,.12); --shadow:none; --card-border:rgba(225,225,225,.12); }
+  }
+  * { box-sizing:border-box; }
+  body { font-family:var(--sans); margin:0; padding:16px; background:var(--bg);
+         color:var(--text); line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .card { max-width:760px; margin:0 auto; background:var(--card); border-radius:12px;
+          box-shadow:var(--shadow); border:1px solid var(--card-border); padding:20px; }
+  h1 { font-size:1.375rem; font-weight:500; margin:0 0 4px; }
+  .sub { color:var(--secondary); font-size:.9rem; margin:0 0 18px; }
+  button { font:inherit; font-weight:500; padding:10px 18px; border:0; border-radius:8px;
+           background:var(--primary); color:#fff; cursor:pointer; }
+  button:hover { filter:brightness(1.06); }
+  button:disabled { opacity:.5; cursor:default; filter:none; }
+  .status { margin:14px 0 0; font-size:.9rem; min-height:1.2em; color:var(--secondary); }
+  .now { font-size:.95rem; margin:8px 0 0; }
+  .now b { font-weight:500; }
+  .frame { margin-top:16px; border-radius:8px; overflow:hidden; background:var(--screen);
+           aspect-ratio:16/9; display:grid; place-items:center; }
+  .frame img { width:100%; height:100%; object-fit:contain; display:block; }
+  .frame .empty { color:#bbb; font-size:.9rem; }
 </style></head><body>
-  <h1>Frame Gallery</h1>
+<div class="card">
+  <h1>REFRAMED Gallery</h1>
   <p class="sub">Curated public-domain art on your Frame TV. Changes on its own;
      use the button to jump to the next piece now.</p>
   <button id="go">Show next now</button>
@@ -43,6 +60,7 @@ CONTROL_HTML = b"""<!doctype html><html><head><meta charset="utf-8">
   <p class="now" id="now"></p>
   <div class="frame"><span class="empty" id="empty">Nothing shown yet</span>
        <img id="prev" alt="" hidden></div>
+</div>
 <script>
   var lastTs = 0;
   function fmt(t){ return t ? new Date(t*1000).toLocaleTimeString() : '-'; }
