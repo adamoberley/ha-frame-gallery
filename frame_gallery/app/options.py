@@ -12,6 +12,7 @@ OPTIONS_PATH = "/data/options.json"
 class Options:
     tv_ip: str
     interval_minutes: int
+    daily_time: str
     width: int
     height: int
     query: str
@@ -51,7 +52,8 @@ def load() -> Options:
 
     return Options(
         tv_ip=str(raw.get("tv_ip", "")).strip(),
-        interval_minutes=int(raw.get("interval_minutes", 60)),
+        interval_minutes=int(raw.get("interval_minutes", 1440)),
+        daily_time=str(raw.get("daily_time", "04:00")).strip(),
         width=width,
         height=height,
         query=str(raw.get("query", "")).strip(),

@@ -13,7 +13,7 @@ import signal
 import sys
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import discover
 import gallery
@@ -64,6 +64,23 @@ def _within_active_hours(spec: str, now: datetime) -> bool:
     return start <= cur < end if start < end else (cur >= start or cur < end)
 
 
+def _seconds_until(daily_time: str, now: datetime) -> int | None:
+    """Seconds until the next HH:MM (local) occurrence, or None if unset/invalid."""
+    if not daily_time:
+        return None
+    try:
+        hh, mm = (int(x) for x in daily_time.split(":"))
+        if not (0 <= hh < 24 and 0 <= mm < 60):
+            raise ValueError
+    except (ValueError, AttributeError):
+        log.warning("bad daily_time %r - using the interval instead", daily_time)
+        return None
+    target = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    if target <= now:
+        target += timedelta(days=1)
+    return max(1, int((target - now).total_seconds()))
+
+
 def _handle_signal(signum, _frame) -> None:
     log.info("signal %s received, shutting down", signum)
     _stop.set()
@@ -93,8 +110,9 @@ def main() -> int:
     httpd = server.make_server(_trigger, status, port=SERVER_PORT)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     log.info("control panel on :%d", SERVER_PORT)
-    log.info("ready: %dx%d to %s every %d min (source=%s, query=%r, fit=%s)",
-             opts.width, opts.height, ", ".join(tv_hosts), opts.interval_minutes,
+    sched = f"daily at {opts.daily_time}" if opts.daily_time else f"every {opts.interval_minutes} min"
+    log.info("ready: %dx%d to %s, %s (source=%s, query=%r, fit=%s)",
+             opts.width, opts.height, ", ".join(tv_hosts), sched,
              opts.source, opts.query or "<all public domain>", opts.fit)
 
     def cycle() -> None:
@@ -138,7 +156,8 @@ def main() -> int:
                 cycle()
             else:
                 log.info("outside active_hours %s - idling", opts.active_hours)
-            _trigger.wait(timeout=opts.interval_seconds)
+            wait_s = _seconds_until(opts.daily_time, datetime.now()) or opts.interval_seconds
+            _trigger.wait(timeout=wait_s)
     finally:
         httpd.shutdown()
     return 0

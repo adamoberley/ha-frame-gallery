@@ -1,16 +1,16 @@
-# Frame Gallery - Home Assistant add-on manifest.
+# REFRAMED Gallery - Home Assistant add-on manifest.
 #
-# A long-running service that, on its own interval, pulls public-domain art from
-# open museum APIs, fits it to your Frame TV's panel, and pushes it to Art Mode
-# - replacing the previous upload in place (the art library never piles up) and
-# never repeating recent pieces. No automation needed; no Google/Bing; content
-# is filterable to keep it family-friendly.
-name: Frame Gallery
-version: "0.2.0"
+# A long-running service that pulls curated public-domain art from reframed.gallery
+# (or the Art Institute of Chicago), fits it to your Frame TV's panel, and pushes
+# it to Art Mode - replacing the previous upload in place (the art library never
+# piles up) and never repeating recent pieces. Switches daily (or on your own
+# interval); no automation needed.
+name: REFRAMED Gallery
+version: "0.3.0"
 slug: frame_gallery
 description: >-
-  Curated public-domain art on your Samsung Frame TV, on an interval - museum
-  APIs, content filtering, no repeats, replaced in place. No automation needed.
+  Curated public-domain art on your Samsung Frame TV from reframed.gallery -
+  daily, cropped to fill, never repeating, replaced in place. No automation needed.
 url: https://github.com/adamoberley/ha-addons/tree/main/frame_gallery
 
 # No Chromium here (we fetch finished images, not render), so all common
@@ -28,7 +28,7 @@ boot: auto
 ingress: true
 ingress_port: 8099
 panel_icon: mdi:image-frame
-panel_title: Frame Gallery
+panel_title: REFRAMED Gallery
 
 # Read-only access to HA's config so we can auto-discover the Frame TV's IP from
 # the samsungtv integration (same host it already uses). We only READ it.
@@ -39,16 +39,17 @@ map:
 
 options:
   tv_ip: ""
-  interval_minutes: 60
+  interval_minutes: 1440
+  daily_time: "04:00"
   source: "reframed"
   resolution: "3840x2160"
   query: ""
   public_domain_only: true
   exclude_keywords: "nude, naked, nudity, erotic, explicit"
-  fit: "matte"
+  fit: "crop"
   mat_color: "#141414"
   active_hours: ""
-  avoid_repeat_count: 500
+  avoid_repeat_count: 2000
   log_level: "info"
 
 schema:
@@ -57,6 +58,8 @@ schema:
   tv_ip: "str?"
   # How often a new piece is chosen and pushed.
   interval_minutes: "int(1,1440)"
+  # Time of day to switch art (HH:MM, local), e.g. "04:00". Blank = use the interval.
+  daily_time: "str?"
   # Where art comes from. "reframed" = reframed.gallery's curated, Frame-ready
   # public-domain collection (recommended). "artic" = the Art Institute of Chicago's
   # full public-domain catalogue (huge, but lots of non-painting objects).

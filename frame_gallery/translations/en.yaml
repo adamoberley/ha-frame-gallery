@@ -8,7 +8,13 @@ configuration:
       "Allow connection?" prompt on each TV - accept it once with the remote.
   interval_minutes:
     name: Change interval (minutes)
-    description: How often a new piece is chosen and pushed to the TV.
+    description: >-
+      How often a new piece is pushed - used only when Daily switch time is blank.
+  daily_time:
+    name: Daily switch time
+    description: >-
+      Switch once a day at this local time (HH:MM, 24-hour), e.g. 04:00. Leave
+      blank to use the change interval above instead.
   source:
     name: Art source
     description: >-
