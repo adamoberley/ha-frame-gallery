@@ -1,6 +1,6 @@
-# Adam Oberley's Home Assistant Add-ons
+# Adam Oberley's Home Assistant Apps (Add-ons)
 
-*A small collection of **local-first** Home Assistant add-ons — each one runs
+*A small collection of **local-first** Home Assistant apps (add-ons) — each one runs
 natively on Home Assistant OS, does its work on your own box, and keeps your data
 off the cloud.*
 
