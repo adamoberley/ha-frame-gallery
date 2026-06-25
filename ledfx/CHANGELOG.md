@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.1 — 2026-06-25
+
+- **Fix a startup crash on boxes with no sound card** ("tuple index out of range"
+  during audio-device enumeration): ship a null ALSA default device so the device
+  list is never empty. Audio still arrives over the network via Sendspin.
+- Ensure the engine is the **git-pinned build past 2.1.9**, so the Sendspin
+  watchdog fix (no idle reconnect churn) and now-playing metadata are present.
+  (1.0.0 images built before the pin landed had the 2.1.9 release.)
+
 ## 1.0.0 — 2026-06-25
 
 First release — a clean, HA-native fork of the community LedFX add-on.

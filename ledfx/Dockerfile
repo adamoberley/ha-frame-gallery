@@ -23,7 +23,13 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
         build-essential pkg-config cmake git \
         libasound2-dev portaudio19-dev libmbedtls-dev \
-        libportaudio2 libasound2 curl unzip ca-certificates; \
+        libportaudio2 libasound2 libasound2-plugins curl unzip ca-certificates; \
+    # This box has no real sound card. LedFX takes its audio over the network
+    # (Sendspin), but PortAudio still enumerates devices at startup and crashes
+    # ("tuple index out of range") when the list is empty. Give ALSA a null
+    # default so there's always >=1 enumerable device; the Sendspin path doesn't
+    # use it.
+    printf 'pcm.!default { type null }\nctl.!default { type null }\n' > /etc/asound.conf; \
     python3 -m pip install --no-cache-dir -r requirements.txt; \
     # Replace the pip-bundled frontend with the ingress-ready HASS build.
     curl -fL --retry 3 -o fe.zip "$FRONTEND_URL"; \

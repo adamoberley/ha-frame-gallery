@@ -1,5 +1,13 @@
 # Changelog
 
+## LedFX 1.0.1 — 2026-06-25
+
+- Fix a startup crash on boxes with no sound card ("tuple index out of range" in
+  audio-device enumeration) by shipping a null ALSA default device. Audio still
+  arrives over the network via Sendspin.
+- Ensure the git-pinned engine (past 2.1.9) is in the image, so the Sendspin
+  watchdog fix and now-playing metadata are present.
+
 ## LedFX 1.0.0 — 2026-06-25
 
 First release of a third add-on in this repository: **LedFX**, the real-time,
