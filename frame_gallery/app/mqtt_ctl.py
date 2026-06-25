@@ -2,9 +2,10 @@
 
 Publishes via MQTT discovery (auto-detecting the Mosquitto broker, or a manual
 host), and subscribes to the command topics so HA can drive the add-on:
-  - sensor.reframed_gallery_current_art  - current title (+ artist/collection attrs)
+  - sensor.reframed_gallery_current_art  - current title (+ artist/year/medium/... attrs)
   - button.reframed_gallery_next         - press to change art now
   - select.reframed_gallery_collection   - switch season/collection live
+  - select.reframed_gallery_matte        - switch the TV-rendered matte live
 
 If MQTT is unavailable the add-on still runs (the panel + interval are unaffected).
 """
@@ -25,12 +26,22 @@ CUR_ATTR = f"{NODE}/current/attributes"
 NEXT_CMD = f"{NODE}/next/press"
 SEL_STATE = f"{NODE}/collection/state"
 SEL_CMD = f"{NODE}/collection/set"
+MATTE_STATE = f"{NODE}/matte/state"
+MATTE_CMD = f"{NODE}/matte/set"
 
-# Offered in the HA "Collection" select. "seasonal" auto-tracks the date; "all"
-# is the whole catalogue; the rest are reframed.gallery collection slugs.
-SELECT_OPTIONS = ["seasonal", "all", "winter", "spring-blossoms", "here-comes-the-sun",
-                  "fall", "christmas", "by-the-sea", "golden-hour", "into-the-woods",
-                  "nocturnes-moonlight", "in-bloom", "mountains-valleys", "wild-seas"]
+# Offered in the HA "Collection" select. "seasonal" auto-tracks the date;
+# "weather" tracks the configured HA weather entity; "all" is the whole
+# catalogue; the rest are reframed.gallery collection slugs.
+SELECT_OPTIONS = ["seasonal", "weather", "all", "winter", "spring-blossoms",
+                  "here-comes-the-sun", "fall", "christmas", "by-the-sea",
+                  "golden-hour", "into-the-woods", "nocturnes-moonlight",
+                  "in-bloom", "mountains-valleys", "wild-seas"]
+
+# Offered in the HA "Matte" select - common Samsung matte ids (<style>_<color>).
+# "none" keeps the in-image fit; the rest let the TV render the mat. Exact
+# availability varies by Frame model/year; an unsupported id falls back to none.
+MATTE_OPTIONS = ["none", "modern_polar", "modern_apricot", "modern_black",
+                 "shadowbox_polar", "shadowbox_black", "flexible_polar"]
 
 
 def _device() -> dict:
@@ -39,12 +50,14 @@ def _device() -> dict:
 
 
 class MqttCtl:
-    def __init__(self, opts, on_next, on_collection) -> None:
+    def __init__(self, opts, on_next, on_collection, on_matte=None) -> None:
         self.opts = opts
         self.on_next = on_next                 # callable() -> show next now
         self.on_collection = on_collection     # callable(slug) -> switch collection
+        self.on_matte = on_matte               # callable(matte_id) -> switch TV matte
         self.client = None
         self.current_collection = (getattr(opts, "collection", "") or "seasonal")
+        self.current_matte = (getattr(opts, "tv_matte", "") or "none")
 
     def _resolve(self):
         o = self.opts
@@ -105,9 +118,16 @@ class MqttCtl:
             "unique_id": f"{NODE}_collection", "command_topic": SEL_CMD,
             "state_topic": SEL_STATE, "options": SELECT_OPTIONS,
             "availability_topic": AVAIL, "icon": "mdi:palette", "device": _device()}), retain=True)
+        client.publish(f"homeassistant/select/{NODE}/matte/config", json.dumps({
+            "name": "Matte", "object_id": f"{NODE}_matte",
+            "unique_id": f"{NODE}_matte", "command_topic": MATTE_CMD,
+            "state_topic": MATTE_STATE, "options": MATTE_OPTIONS,
+            "availability_topic": AVAIL, "icon": "mdi:image-frame",
+            "device": _device()}), retain=True)
         client.publish(AVAIL, "online", retain=True)
         client.publish(SEL_STATE, self.current_collection, retain=True)
-        client.subscribe([(NEXT_CMD, 0), (SEL_CMD, 0)])
+        client.publish(MATTE_STATE, self.current_matte, retain=True)
+        client.subscribe([(NEXT_CMD, 0), (SEL_CMD, 0), (MATTE_CMD, 0)])
         log.info("MQTT connected; REFRAMED Gallery entities announced")
 
     def _on_message(self, _client, _userdata, msg) -> None:
@@ -124,13 +144,26 @@ class MqttCtl:
             if self.client:
                 self.client.publish(SEL_STATE, payload, retain=True)
             self.on_collection(payload)
+        elif msg.topic == MATTE_CMD and payload:
+            log.info("HA set matte -> %s", payload)
+            self.current_matte = payload
+            if self.client:
+                self.client.publish(MATTE_STATE, payload, retain=True)
+            if self.on_matte:
+                self.on_matte(payload)
 
     def publish_current(self, art) -> None:
         if not self.client:
             return
         self.client.publish(CUR_STATE, (art.title or "Unknown")[:255], retain=True)
         self.client.publish(CUR_ATTR, json.dumps({
-            "artist": art.artist, "collection": self.current_collection,
+            "artist": art.artist,
+            "year": getattr(art, "year", ""),
+            "medium": getattr(art, "medium", ""),
+            "movement": getattr(art, "movement", ""),
+            "description": getattr(art, "description", ""),
+            "collection": self.current_collection,
+            "matte": self.current_matte,
             "credit": art.credit, "source": art.source}), retain=True)
 
     def stop(self) -> None:

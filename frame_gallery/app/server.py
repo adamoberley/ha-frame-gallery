@@ -1,8 +1,12 @@
-"""Ingress control panel: shows the current piece + a "Show next now" button.
+"""Ingress control panel: the current piece, its details, and quick actions.
 
 Bound to 0.0.0.0 for ingress (HA authenticates it). URLs are relative so they
-work under the ingress token path. `trigger` is set by the button to request an
-immediate change; `status` is a dict the loop updates and the panel reads.
+work under the ingress token path.
+  - `trigger` is set by "Show next" to request a fresh pick.
+  - `repush` is set by "Re-push to TV" to re-send the current image.
+  - `status` is a dict the loop updates and the panel reads.
+
+Endpoints: GET / (panel), /status (JSON), /preview.jpg, /healthz; POST /next, /repush.
 """
 from __future__ import annotations
 
@@ -19,84 +23,211 @@ PREVIEW_PATH = "/data/last.jpg"
 CONTROL_HTML = b"""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>REFRAMED Gallery</title>
+<link rel="icon" id="favicon">
 <style>
   :root {
     color-scheme: light dark;
-    --primary:#03a9f4; --bg:#f5f5f5; --card:#ffffff; --text:#212121;
-    --secondary:#727272; --divider:rgba(0,0,0,.12); --screen:#202124;
+    --primary:#03a9f4; --accent:#03a9f4; --bg:#f5f5f5; --card:#ffffff; --text:#212121;
+    --secondary:#727272; --divider:rgba(0,0,0,.12); --screen:#15161a;
+    --chip:rgba(0,0,0,.06);
     --shadow:0 2px 1px -1px rgba(0,0,0,.2),0 1px 1px 0 rgba(0,0,0,.14),0 1px 3px 0 rgba(0,0,0,.12);
     --card-border:transparent;
+    --ok:#2e7d32; --busy:#0277bd; --err:#c62828; --wait:#9e9e9e;
     --sans:Roboto,"Helvetica Neue",-apple-system,system-ui,"Segoe UI",Arial,sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#111111; --card:#1c1c1c; --text:#e1e1e1; --secondary:#9b9b9b;
-            --divider:rgba(225,225,225,.12); --shadow:none; --card-border:rgba(225,225,225,.12); }
+            --divider:rgba(225,225,225,.12); --chip:rgba(225,225,225,.08);
+            --shadow:none; --card-border:rgba(225,225,225,.12);
+            --ok:#81c784; --busy:#4fc3f7; --err:#ef9a9a; --wait:#9e9e9e; }
   }
   * { box-sizing:border-box; }
   body { font-family:var(--sans); margin:0; padding:16px; background:var(--bg);
          color:var(--text); line-height:1.5; -webkit-font-smoothing:antialiased; }
-  .card { max-width:760px; margin:0 auto; background:var(--card); border-radius:12px;
-          box-shadow:var(--shadow); border:1px solid var(--card-border); padding:20px; }
-  h1 { font-size:1.375rem; font-weight:500; margin:0 0 4px; }
-  .sub { color:var(--secondary); font-size:.9rem; margin:0 0 18px; }
-  button { font:inherit; font-weight:500; padding:10px 18px; border:0; border-radius:8px;
-           background:var(--primary); color:#fff; cursor:pointer; }
-  button:hover { filter:brightness(1.06); }
-  button:disabled { opacity:.5; cursor:default; filter:none; }
-  .status { margin:14px 0 0; font-size:.9rem; min-height:1.2em; color:var(--secondary); }
-  .now { font-size:.95rem; margin:8px 0 0; }
-  .now b { font-weight:500; }
-  .frame { margin-top:16px; border-radius:8px; overflow:hidden; background:var(--screen);
+  .card { max-width:820px; margin:0 auto; background:var(--card); border-radius:14px;
+          box-shadow:var(--shadow); border:1px solid var(--card-border); overflow:hidden; }
+  .accent { height:4px; background:var(--accent); transition:background .6s ease; }
+  .body { padding:20px; }
+  .head { display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+          flex-wrap:wrap; margin-bottom:14px; }
+  h1 { font-size:1.25rem; font-weight:500; margin:0; }
+  .head .sched { color:var(--secondary); font-size:.82rem; white-space:nowrap; }
+  .frame { border-radius:10px; overflow:hidden; background:var(--screen);
            aspect-ratio:16/9; display:grid; place-items:center; }
   .frame img { width:100%; height:100%; object-fit:contain; display:block; }
-  .frame .empty { color:#bbb; font-size:.9rem; }
+  .frame .empty { color:#888; font-size:.9rem; }
+  .caption { margin:16px 2px 4px; }
+  .title { font-size:1.18rem; font-weight:500; }
+  .byline { font-size:.98rem; margin-top:2px; }
+  .meta2 { color:var(--secondary); font-size:.88rem; margin-top:3px; }
+  .credit { color:var(--secondary); font-size:.78rem; margin-top:6px; opacity:.85; }
+  a.wiki { color:inherit; text-decoration:none; border-bottom:1px dotted transparent; }
+  a.wiki:hover { border-bottom-color:currentColor; }
+  .statusrow { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+               margin:16px 2px 0; font-size:.86rem; color:var(--secondary); }
+  .pill { display:inline-flex; align-items:center; gap:7px; padding:4px 11px;
+          border-radius:999px; background:var(--chip); color:var(--text); font-weight:500; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--wait); }
+  .pill.ok .dot{background:var(--ok)}
+  .pill.busy .dot{background:var(--busy);animation:pulse 1s infinite}
+  .pill.err .dot{background:var(--err)} .pill.err{color:var(--err)}
+  .wait-msg{color:var(--secondary)}
+  @keyframes pulse{50%{opacity:.35}}
+  .sep { opacity:.5; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin:12px 2px 0; }
+  .chip { font-size:.74rem; padding:3px 9px; border-radius:999px; background:var(--chip);
+          color:var(--secondary); }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
+  button { font:inherit; font-weight:500; padding:10px 18px; border:0; border-radius:9px;
+           cursor:pointer; }
+  button.primary { background:var(--primary); color:#fff; }
+  button.ghost { background:var(--chip); color:var(--text); }
+  button:hover { filter:brightness(1.06); }
+  button:disabled { opacity:.5; cursor:default; filter:none; }
 </style></head><body>
 <div class="card">
-  <h1>REFRAMED Gallery</h1>
-  <p class="sub">Curated public-domain art on your Frame TV. Changes on its own;
-     use the button to jump to the next piece now.</p>
-  <button id="go">Show next now</button>
-  <div class="status" id="status">&nbsp;</div>
-  <p class="now" id="now"></p>
-  <div class="frame"><span class="empty" id="empty">Nothing shown yet</span>
-       <img id="prev" alt="" hidden></div>
+  <div class="accent" id="accent"></div>
+  <div class="body">
+    <div class="head">
+      <h1>REFRAMED Gallery</h1>
+      <span class="sched" id="sched"></span>
+    </div>
+    <div class="frame"><span class="empty" id="empty">Nothing shown yet</span>
+         <img id="prev" alt="" hidden crossorigin="anonymous"></div>
+    <div class="caption" id="caption"></div>
+    <div class="statusrow">
+      <span class="pill wait" id="pill"><span class="dot"></span>
+        <span id="pilltext">Starting</span></span>
+      <span class="sep">&middot;</span><span id="tvs">-</span>
+      <span class="sep">&middot;</span><span id="changed">never</span>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="actions">
+      <button class="primary" id="go">Show next</button>
+      <button class="ghost" id="repush">Re-push to TV</button>
+    </div>
+  </div>
 </div>
 <script>
   var lastTs = 0;
-  function fmt(t){ return t ? new Date(t*1000).toLocaleTimeString() : '-'; }
-  function refresh(){
-    fetch('status', {cache:'no-store'}).then(function(r){return r.json();}).then(function(s){
-      document.getElementById('go').disabled = !!s.busy;
-      var state = s.busy ? 'Fetching a new piece...'
-                : (s.last_error ? ('Last error: ' + s.last_error) : 'Idle');
-      document.getElementById('status').textContent = state
-        + ' \\u2022 ' + s.tv_count + ' TV(s) \\u2022 every ' + s.interval_minutes
-        + ' min \\u2022 last changed ' + fmt(s.last_ts);
-      document.getElementById('now').innerHTML = s.title
-        ? ('Now showing: <b>' + s.title + '</b> \\u2014 ' + (s.artist||'') +
-           (s.credit ? ' <span style="opacity:.6">(' + s.credit + ')</span>' : ''))
-        : '';
-      if (s.last_ts && s.last_ts !== lastTs){
-        lastTs = s.last_ts;
-        var img = document.getElementById('prev');
-        img.src = 'preview.jpg?t=' + s.last_ts; img.hidden = false;
-        document.getElementById('empty').style.display = 'none';
-      }
-    }).catch(function(){});
+  var SEP = ' <span class="sep">&middot;</span> ';
+  function esc(s){
+    var d=document.createElement('div'); d.textContent=(s==null?'':s); return d.innerHTML;
   }
-  document.getElementById('go').onclick = function(){
-    document.getElementById('go').disabled = true;
-    document.getElementById('status').textContent = 'Queued...';
-    fetch('next', {method:'POST'}).catch(function(){});
+  function wiki(text, query){
+    if(!text) return '';
+    var u='https://en.wikipedia.org/wiki/Special:Search?search='+encodeURIComponent(query||text);
+    return '<a class="wiki" href="'+u+'" target="_blank" rel="noopener">'+esc(text)+'</a>';
+  }
+  function yearLink(y){
+    if(!y) return '';
+    var m=(''+y).match(/\\d{4}/);
+    return wiki(y, m ? (m[0]+' in art') : y);
+  }
+  function rel(t){
+    if(!t) return 'never';
+    var s=Math.max(0, Math.floor(Date.now()/1000 - t));
+    if(s<45) return 'just now';
+    if(s<5400) return Math.max(1,Math.round(s/60))+' min ago';
+    if(s<86400) return Math.round(s/3600)+' hr ago';
+    return Math.round(s/86400)+' d ago';
+  }
+  function tintFavicon(img){
+    try{
+      var c=document.createElement('canvas'); c.width=c.height=16;
+      var x=c.getContext('2d'); x.drawImage(img,0,0,16,16);
+      var d=x.getImageData(0,0,16,16).data, r=0,g=0,b=0,n=0;
+      for(var i=0;i<d.length;i+=4){ r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++; }
+      r=Math.round(r/n); g=Math.round(g/n); b=Math.round(b/n);
+      var col='rgb('+r+','+g+','+b+')';
+      document.documentElement.style.setProperty('--accent', col);
+      var f=document.createElement('canvas'); f.width=f.height=32;
+      var fx=f.getContext('2d'); fx.fillStyle=col;
+      fx.beginPath(); fx.moveTo(7,0);
+      fx.arcTo(32,0,32,32,7); fx.arcTo(32,32,0,32,7);
+      fx.arcTo(0,32,0,0,7); fx.arcTo(0,0,32,0,7); fx.closePath(); fx.fill();
+      document.getElementById('favicon').href=f.toDataURL('image/png');
+    }catch(e){}
+  }
+  function render(s){
+    document.getElementById('sched').textContent = s.daily_time
+      ? 'Switches daily at '+s.daily_time
+      : 'Switches every '+s.interval_minutes+' min';
+
+    var cap='';
+    if(s.title){
+      var q=((s.title||'')+' '+(s.artist||'')).trim();
+      cap += '<div class="title">'+wiki(s.title, q)+'</div>';
+      var by=[];
+      if(s.artist) by.push(wiki(s.artist, s.artist));
+      if(s.year) by.push(yearLink(s.year));
+      if(by.length) cap += '<div class="byline">'+by.join(SEP)+'</div>';
+      var m=[];
+      if(s.medium) m.push(esc(s.medium));
+      if(s.movement) m.push(esc(s.movement));
+      if(m.length) cap += '<div class="meta2">'+m.join(SEP)+'</div>';
+      if(s.credit) cap += '<div class="credit">Source: '+esc(s.credit)+'</div>';
+    } else {
+      cap = '<div class="byline wait-msg">Waiting for the first piece&hellip;</div>';
+    }
+    document.getElementById('caption').innerHTML = cap;
+
+    var pill=document.getElementById('pill'), pt=document.getElementById('pilltext'), cls, txt;
+    var noTv=(s.last_ts && s.tv_count && s.tv_ok===0);
+    if(s.busy){ cls='busy'; txt='Fetching a new piece'; }
+    else if(s.last_error){ cls='err'; txt=s.last_error; }
+    else if(noTv){ cls='err'; txt='No TVs reached'; }
+    else if(s.last_ts){ cls='ok'; txt=s.note ? s.note : 'Idle'; }
+    else { cls='wait'; txt='Starting'; }
+    pill.className='pill '+cls; pt.textContent=txt;
+
+    var ok=(s.tv_ok==null?'-':s.tv_ok), tot=(s.tv_count==null?'-':s.tv_count);
+    document.getElementById('tvs').textContent = ok+'/'+tot+' TV'+(tot===1?'':'s')+' reached';
+    document.getElementById('changed').textContent = 'changed '+rel(s.last_ts);
+
+    var chips='';
+    if(s.collection) chips += '<span class="chip">Collection: '+esc(s.collection)+'</span>';
+    if(s.matte && s.matte!=='none') chips += '<span class="chip">Matte: '+esc(s.matte)+'</span>';
+    if(s.source) chips += '<span class="chip">'+esc(s.source)+'</span>';
+    document.getElementById('chips').innerHTML = chips;
+
+    document.getElementById('go').disabled = !!s.busy;
+    document.getElementById('repush').disabled = !!s.busy || !s.last_ts;
+
+    if(s.last_ts && s.last_ts !== lastTs){
+      lastTs = s.last_ts;
+      var img=document.getElementById('prev');
+      img.onload=function(){ tintFavicon(img); };
+      img.src='preview.jpg?t='+s.last_ts; img.hidden=false;
+      document.getElementById('empty').style.display='none';
+    }
+  }
+  function refresh(){
+    fetch('status',{cache:'no-store'})
+      .then(function(r){return r.json();}).then(render).catch(function(){});
+  }
+  function post(url, btn){
+    var b=document.getElementById(btn); b.disabled=true;
+    fetch(url,{method:'POST'}).catch(function(){});
     setTimeout(refresh, 600);
-  };
+  }
+  document.getElementById('go').onclick=function(){ post('next','go'); };
+  document.getElementById('repush').onclick=function(){ post('repush','repush'); };
   refresh(); setInterval(refresh, 2000);
 </script></body></html>"""
 
 
 def make_server(trigger: threading.Event, status: dict,
+                repush: threading.Event | None = None,
+                wake: threading.Event | None = None,
                 host: str = "0.0.0.0", port: int = 8099):
     debug = status.get("_debug", False)
+
+    def _signal(event):
+        if event is not None:
+            event.set()
+        if wake is not None:
+            wake.set()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -112,9 +243,14 @@ def make_server(trigger: threading.Event, status: dict,
                 self.wfile.write(body)
 
         def do_POST(self):
-            if urlparse(self.path).path == "/next":
-                trigger.set()
+            path = urlparse(self.path).path
+            if path == "/next":
+                _signal(trigger)
                 log.info("manual 'show next' requested from control panel")
+                self._send(200, "application/json", b'{"queued":true}')
+            elif path == "/repush":
+                _signal(repush)
+                log.info("manual 're-push' requested from control panel")
                 self._send(200, "application/json", b'{"queued":true}')
             else:
                 self._send(404, "text/plain", b"not found")
@@ -126,6 +262,25 @@ def make_server(trigger: threading.Event, status: dict,
             elif path == "/status":
                 public = {k: v for k, v in status.items() if not k.startswith("_")}
                 self._send(200, "application/json", json.dumps(public).encode())
+            elif path == "/healthz":
+                err = status.get("last_error")
+                last_ts = status.get("last_ts")
+                tv_count = status.get("tv_count", 0)
+                tv_ok = status.get("tv_ok", 0)
+                # Degraded only on a real failure: a hard error, or a completed
+                # cycle that reached zero TVs. A partial push (tv_ok>0) is healthy.
+                if err or (last_ts and tv_count and tv_ok == 0):
+                    state, code = "degraded", 503
+                elif last_ts:
+                    state, code = "ok", 200
+                else:
+                    state, code = "starting", 200
+                body = json.dumps({
+                    "status": state, "busy": status.get("busy", False),
+                    "last_ts": last_ts or 0, "last_error": err, "note": status.get("note"),
+                    "tv_ok": tv_ok, "tv_count": tv_count,
+                }).encode()
+                self._send(code, "application/json", body)
             elif path == "/preview.jpg":
                 try:
                     with open(PREVIEW_PATH, "rb") as fh:

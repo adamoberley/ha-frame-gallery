@@ -6,6 +6,14 @@ configuration:
       Leave blank to auto-discover every Frame from your Samsung TV integration.
       Or enter one or more IPs, comma-separated, to override. First run shows an
       "Allow connection?" prompt on each TV - accept it once with the remote.
+  tv_mac:
+    name: Frame TV MAC(s) (Wake-on-LAN)
+    description: >-
+      Optional. MAC address(es) of your Frame TV(s) so a sleeping TV gets a
+      Wake-on-LAN nudge before a push retry. Comma-separated, in the same order
+      as the IPs above. For more than one TV, also set Frame TV IP(s) explicitly
+      so each MAC pairs with the right TV (auto-discovery order isn't guaranteed).
+      Leave blank to skip Wake-on-LAN.
   interval_minutes:
     name: Change interval (minutes)
     description: >-
@@ -26,13 +34,20 @@ configuration:
     name: Collection (reframed)
     description: >-
       Which reframed.gallery collection to show. "seasonal" auto-tracks the date
-      (Winter/Spring/Summer/Fall, with December = Christmas); "all" pulls the whole
-      catalogue; or set a collection slug like "by-the-sea", "golden-hour", or
-      "nocturnes-moonlight".
+      (Winter/Spring/Summer/Fall, with December = Christmas); "weather" tracks the
+      weather entity below (rain = nocturnes, snow = winter, sun = summer, etc.);
+      "all" pulls the whole catalogue; or set a collection slug like "by-the-sea",
+      "golden-hour", or "nocturnes-moonlight".
   hemisphere:
     name: Hemisphere
     description: >-
       Used by "seasonal" only - flips the season calendar for the Southern hemisphere.
+  weather_entity:
+    name: Weather entity (for "weather" collection)
+    description: >-
+      The Home Assistant weather entity to follow when Collection is "weather",
+      e.g. weather.home or weather.forecast_home. Its condition picks a matching
+      collection; unknown conditions fall back to the season. Leave blank if unused.
   resolution:
     name: Panel resolution
     description: 3840x2160 for 4K Frames (most); 1920x1080 for 32" / pre-2021.
@@ -60,6 +75,14 @@ configuration:
   mat_color:
     name: Mat color
     description: Background colour behind matted art (hex). Dark hides glare at night.
+  tv_matte:
+    name: TV matte
+    description: >-
+      "none" keeps the in-image fit above. Or enter a Samsung matte id (e.g.
+      modern_apricot, shadowbox_polar) to have the TV render a real mat around the
+      art - it's sent full-bleed so it isn't double-framed. Availability varies by
+      Frame model; an unsupported id falls back to none. Switch it live from the
+      Matte select in Home Assistant.
   active_hours:
     name: Active hours
     description: >-

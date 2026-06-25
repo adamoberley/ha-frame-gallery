@@ -20,6 +20,7 @@ import gallery
 import options as options_mod
 import server
 import urllib3
+import weather
 from imaging import fit_to_panel
 from mqtt_ctl import MqttCtl
 from sources.artic import ArticSource
@@ -38,7 +39,10 @@ _SOURCES = {"reframed": ReframedSource, "artic": ArticSource}
 
 log = logging.getLogger("frame-gallery")
 _stop = threading.Event()
-_trigger = threading.Event()
+_wake = threading.Event()           # wakes the scheduler loop (any intent below sets it)
+_trigger = threading.Event()        # intent: pick a fresh piece
+_repush = threading.Event()         # intent: re-send the current image as-is
+_remat = threading.Event()          # intent: re-render the current piece with the new matte
 
 
 def _setup_logging(level_name: str) -> None:
@@ -85,7 +89,7 @@ def _seconds_until(daily_time: str, now: datetime) -> int | None:
 def _handle_signal(signum, _frame) -> None:
     log.info("signal %s received, shutting down", signum)
     _stop.set()
-    _trigger.set()
+    _wake.set()
 
 
 def main() -> int:
@@ -98,60 +102,117 @@ def main() -> int:
     if not tv_hosts:
         log.error("no Frame TV found or set - fill in tv_ip and restart")
         return 1
-    tvs = [FrameTV(host) for host in tv_hosts]
+    # Optional per-TV MACs (comma-separated, paired with tv_hosts by position)
+    # enable a Wake-on-LAN nudge before a retry.
+    macs = [m.strip() for m in (opts.tv_mac or "").split(",")]
+    tvs = [FrameTV(host, matte=opts.tv_matte, mac=(macs[i] if i < len(macs) else ""))
+           for i, host in enumerate(tv_hosts)]
     history = History(opts.avoid_repeat_count)
     sources = [_SOURCES.get(opts.source, ReframedSource)()]
     reframed_src = next((s for s in sources if getattr(s, "name", "") == "reframed"), None)
 
+    status = {
+        "busy": False, "last_ts": 0, "last_error": None, "note": None,
+        "title": "", "artist": "", "year": "", "medium": "", "movement": "",
+        "credit": "", "source": opts.source,
+        "collection": opts.collection, "matte": opts.tv_matte,
+        "tv_count": len(tvs), "tv_ok": 0,
+        "interval_minutes": opts.interval_minutes, "daily_time": opts.daily_time,
+        "_debug": opts.log_level == "debug",
+    }
+    # The source bytes + matte the current /data/last.jpg was rendered from, so a
+    # matte change can re-render the same piece and a re-push uses the right matte.
+    render_state = {"source": None, "matte": opts.tv_matte}
+
     def _show_next():
         _trigger.set()
+        _wake.set()
 
     def _set_collection(slug):
         if reframed_src is not None:
-            reframed_src.override = slug   # active_collection() interprets seasonal/all/slug
+            reframed_src.override = slug   # active_collection() reads seasonal/weather/all/slug
+        status["collection"] = slug
         _trigger.set()
+        _wake.set()
 
-    mqttctl = MqttCtl(opts, _show_next, _set_collection)
+    def _set_matte(matte_id):
+        m = matte_id or "none"
+        for tv in tvs:
+            tv.matte = m
+        status["matte"] = m
+        _remat.set()                      # re-frame the current piece, don't re-pick
+        _wake.set()
+
+    mqttctl = MqttCtl(opts, _show_next, _set_collection, _set_matte)
     mqttctl.start()
 
-    status = {
-        "busy": False, "last_ts": 0, "last_error": None,
-        "title": "", "artist": "", "credit": "",
-        "tv_count": len(tvs), "interval_minutes": opts.interval_minutes,
-        "_debug": opts.log_level == "debug",
-    }
-    httpd = server.make_server(_trigger, status, port=SERVER_PORT)
+    httpd = server.make_server(_trigger, status, _repush, _wake, port=SERVER_PORT)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     log.info("control panel on :%d", SERVER_PORT)
-    sched = f"daily at {opts.daily_time}" if opts.daily_time else f"every {opts.interval_minutes} min"
+    sched = (f"daily at {opts.daily_time}" if opts.daily_time
+             else f"every {opts.interval_minutes} min")
     log.info("ready: %dx%d to %s, %s (source=%s, collection=%s, fit=%s)",
              opts.width, opts.height, ", ".join(tv_hosts), sched,
              opts.source, opts.collection, opts.fit)
 
+    def _write_preview(jpeg: bytes) -> None:
+        tmp = PREVIEW_PATH + ".tmp"
+        with open(tmp, "wb") as fh:
+            fh.write(jpeg)
+        os.replace(tmp, PREVIEW_PATH)
+
+    def _push_all(jpeg: bytes, matte: str, what: str) -> int:
+        """Push to every TV with a single matte snapshot; bail early on shutdown.
+        Returns the count that succeeded."""
+        ok = 0
+        for tv in tvs:
+            if _stop.is_set():
+                break
+            try:
+                tv.push(jpeg, matte=matte)
+                ok += 1
+            except Exception as exc:
+                log.error("%s %s failed: %s", tv.host, what, exc)
+        return ok
+
+    def _record(ok: int) -> None:
+        # last_error stays for genuine failures; a partial push is informational.
+        status.update(tv_ok=ok, last_ts=time.time(), last_error=None,
+                      note=None if ok == len(tvs) else f"reached {ok}/{len(tvs)} TV(s)")
+
     def cycle() -> None:
         status["busy"] = True
         try:
+            # Weather-aware mode: refresh the HA condition so reframed can map it
+            # to a collection (only when "weather" is the active choice).
+            if reframed_src is not None:
+                chosen = (reframed_src.override or opts.collection or "").strip().lower()
+                if chosen == "weather" and opts.weather_entity:
+                    cond = weather.current_condition(opts.weather_entity)
+                    if cond:        # keep last-known-good on a transient read failure
+                        reframed_src.weather_condition = cond
+                elif chosen == "weather":
+                    log.warning("collection 'weather' selected but no weather_entity "
+                                "set - using seasonal art")
             art, data = gallery.pick(opts, history, sources)
             if not art:
-                status["last_error"] = "no artwork found (try a broader query)"
+                status.update(last_error="no artwork found (try a broader query)", note=None)
                 log.error("no usable artwork this cycle")
                 return
-            jpeg = fit_to_panel(data, opts.width, opts.height, opts.fit, opts.mat_color)
-            tmp = PREVIEW_PATH + ".tmp"
-            with open(tmp, "wb") as fh:
-                fh.write(jpeg)
-            os.replace(tmp, PREVIEW_PATH)
-            ok = 0
-            for tv in tvs:
-                try:
-                    tv.push(jpeg)
-                    ok += 1
-                except Exception as exc:
-                    log.error("%s push failed: %s", tv.host, exc)
+            # With a TV-rendered matte, send full-bleed 16:9 so the TV draws the
+            # mat (no in-image bars to double-frame); otherwise use the configured fit.
+            active_matte = status.get("matte", "none")
+            fit_mode = "crop" if active_matte and active_matte != "none" else opts.fit
+            jpeg = fit_to_panel(data, opts.width, opts.height, fit_mode, opts.mat_color)
+            _write_preview(jpeg)
+            ok = _push_all(jpeg, active_matte, "push")
             history.add(art.key)
+            render_state["source"] = data        # cache for a later re-matte
+            render_state["matte"] = active_matte
             status.update(title=art.title, artist=art.artist, credit=art.credit,
-                          last_ts=time.time(),
-                          last_error=None if ok == len(tvs) else f"pushed to {ok}/{len(tvs)} TV(s)")
+                          year=getattr(art, "year", ""), medium=getattr(art, "medium", ""),
+                          movement=getattr(art, "movement", ""), source=art.source)
+            _record(ok)
             log.info("showing '%s' by %s (%s) -> %d/%d TV(s)",
                      art.title, art.artist, art.credit, ok, len(tvs))
             mqttctl.publish_current(art)
@@ -161,17 +222,77 @@ def main() -> int:
         finally:
             status["busy"] = False
 
+    def remat() -> None:
+        """Re-render the current piece with the live matte and re-push, so a matte
+        change re-frames what's showing instead of picking a new piece."""
+        src = render_state.get("source")
+        if not src:
+            cycle()                  # nothing cached yet - just show something
+            return
+        status["busy"] = True
+        try:
+            active_matte = status.get("matte", "none")
+            fit_mode = "crop" if active_matte and active_matte != "none" else opts.fit
+            jpeg = fit_to_panel(src, opts.width, opts.height, fit_mode, opts.mat_color)
+            _write_preview(jpeg)
+            ok = _push_all(jpeg, active_matte, "re-matte push")
+            render_state["matte"] = active_matte
+            _record(ok)
+            log.info("re-matted current piece (%s) -> %d/%d TV(s)", active_matte, ok, len(tvs))
+        except Exception as exc:
+            status["last_error"] = str(exc)
+            log.error("re-matte failed: %s", exc)
+        finally:
+            status["busy"] = False
+
+    def repush_last() -> None:
+        """Re-send the current image to the TV(s) without picking a new piece -
+        handy if a TV was off or got switched away. Uses the matte the cached
+        image was rendered with, so the framing always matches."""
+        if not os.path.exists(PREVIEW_PATH):
+            log.info("re-push requested but nothing has been shown yet")
+            return
+        status["busy"] = True
+        try:
+            with open(PREVIEW_PATH, "rb") as fh:
+                jpeg = fh.read()
+            ok = _push_all(jpeg, render_state.get("matte", "none"), "re-push")
+            _record(ok)
+            log.info("re-pushed current image -> %d/%d TV(s)", ok, len(tvs))
+        except Exception as exc:
+            status["last_error"] = str(exc)
+            log.error("re-push failed: %s", exc)
+        finally:
+            status["busy"] = False
+
     try:
-        # First change happens immediately, so a restart is also a "show now".
+        # First change happens immediately when within active_hours (always, if
+        # active_hours is unset), so a restart usually doubles as a "show now".
         while not _stop.is_set():
-            manual = _trigger.is_set()
+            now = datetime.now()
+            # Compute the next wake BEFORE doing work, so a long push (or a remat/
+            # repush landing near the daily time) can't roll the target a full day
+            # forward and skip that day's scheduled change.
+            wait_s = _seconds_until(opts.daily_time, now) or opts.interval_seconds
+            want_next = _trigger.is_set()
+            want_remat = _remat.is_set()
+            want_repush = _repush.is_set()
             _trigger.clear()
-            if manual or _within_active_hours(opts.active_hours, datetime.now()):
+            _remat.clear()
+            _repush.clear()
+            _wake.clear()
+            intent = want_next or want_remat or want_repush
+            in_window = _within_active_hours(opts.active_hours, now)
+            # A fresh pick supersedes the others; a bare timeout cycles only in-hours.
+            if want_next or (not intent and in_window):
                 cycle()
-            else:
+            elif want_remat:
+                remat()
+            elif want_repush:
+                repush_last()
+            elif not intent:
                 log.info("outside active_hours %s - idling", opts.active_hours)
-            wait_s = _seconds_until(opts.daily_time, datetime.now()) or opts.interval_seconds
-            _trigger.wait(timeout=wait_s)
+            _wake.wait(timeout=wait_s)
     finally:
         mqttctl.stop()
         httpd.shutdown()

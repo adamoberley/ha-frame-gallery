@@ -55,6 +55,32 @@ def _deslug(seg: str) -> str:
     return seg.replace("-", " ").strip().title() or "Unknown"
 
 
+# HA weather conditions -> a reframed collection slug that matches the mood.
+# Anything not listed (or an unknown condition) falls back to the season.
+_WEATHER_SLUGS = {
+    "sunny": "here-comes-the-sun",
+    "clear-night": "nocturnes-moonlight",
+    "partlycloudy": "golden-hour",
+    "cloudy": "into-the-woods",
+    "fog": "mountains-valleys",
+    "rainy": "nocturnes-moonlight",
+    "pouring": "nocturnes-moonlight",
+    "lightning": "wild-seas",
+    "lightning-rainy": "wild-seas",
+    "snowy": "winter",
+    "snowy-rainy": "winter",
+    "hail": "winter",
+    "windy": "wild-seas",
+    "windy-variant": "wild-seas",
+}
+
+
+def _weather_slug(condition: str | None, now: datetime, hemisphere: str) -> str:
+    """Map an HA weather condition to a collection slug, or fall back to the season."""
+    slug = _WEATHER_SLUGS.get((condition or "").strip().lower())
+    return slug or _seasonal_slug(now, hemisphere)
+
+
 def _seasonal_slug(now: datetime, hemisphere: str) -> str:
     """Current season's reframed collection. December -> Christmas (the holiday, both
     hemispheres); otherwise map by season, shifting 6 months south of the equator."""
@@ -78,17 +104,21 @@ class ReframedSource(ArtSource):
 
     def __init__(self) -> None:
         self.override: str | None = None        # live collection switch (HA select)
+        self.weather_condition: str | None = None  # set by main when weather mode is on
         self._pools: dict[str, list[str]] = {}   # pool key -> artwork page URLs
         self._pool_ts: dict[str, float] = {}
         self._resolved: dict[str, Artwork] = {}  # page URL -> Artwork
 
     def active_collection(self, opts) -> str:
-        """Effective collection slug: live override beats the option; '' / 'all' = whole catalogue."""
+        """Effective collection slug: override beats option; '' / 'all' = whole catalogue."""
         choice = (self.override or getattr(opts, "collection", "") or "").strip().lower()
+        hemi = getattr(opts, "hemisphere", "north")
         if choice in ("", "all"):
             return ""
         if choice == "seasonal":
-            return _seasonal_slug(datetime.now(), getattr(opts, "hemisphere", "north"))
+            return _seasonal_slug(datetime.now(), hemi)
+        if choice == "weather":
+            return _weather_slug(self.weather_condition, datetime.now(), hemi)
         return choice
 
     def _get(self, url: str) -> requests.Response | None:

@@ -30,7 +30,7 @@ layer is a plug-in.
 
 ## Setup
 
-1. **Install** this app (you added the repo under *Settings → Add-ons → ⋮ →
+1. **Install** this app (you added the repo under *Settings → Apps → ⋮ →
    Repositories*).
 2. Usually **nothing to configure** — it auto-discovers your Frame from the
    Samsung TV integration. Optionally set **Art search** (e.g. `landscape`).
@@ -44,19 +44,58 @@ layer is a plug-in.
 
 | Option | Default | What it does |
 | --- | --- | --- |
-| **Art search** (`query`) | *(blank)* | Free-text search that shapes the whole collection: `landscape`, `impressionism`, `ukiyo-e`, `Monet`… Blank = all public-domain works. |
+| **Art source** (`source`) | `reframed` | `reframed` = reframed.gallery's curated, Frame-ready public-domain set (recommended); `artic` = the Art Institute of Chicago's full CC0 catalogue. |
+| **Collection** (`collection`) | `seasonal` | reframed only. `seasonal` auto-tracks the date; `weather` tracks the weather entity below; `all` = whole catalogue; or a slug like `by-the-sea`, `golden-hour`, `nocturnes-moonlight`. |
+| **Hemisphere** | `north` | Flips the `seasonal` calendar for the Southern hemisphere. |
+| **Weather entity** (`weather_entity`) | *(blank)* | For the `weather` collection — an HA `weather.*` entity (e.g. `weather.home`). Its condition picks a matching collection; unknown conditions fall back to the season. |
+| **Art search** (`query`) | *(blank)* | Free-text search that shapes the collection: `landscape`, `impressionism`, `ukiyo-e`, `Monet`… Blank = the whole collection. |
 | **Public domain only** | on | Only show CC0 works (recommended — clean licensing). |
 | **Excluded keywords** | *(mature-content terms)* | Comma-separated; any work whose title/artist/tags match a listed term is skipped. Blank to disable. |
-| **Change interval** | 60 | Minutes between pieces. |
-| **Fit** | matte | `matte` frames the whole work on a mat (nothing cropped); `crop` fills the panel and trims the edges. |
+| **Change interval** | 1440 | Minutes between pieces (used when Daily switch time is blank). |
+| **Daily switch time** | `04:00` | Switch once a day at this local `HH:MM`. Blank = use the interval. |
+| **Fit** | `crop` | `crop` fills the panel and trims the edges; `matte` frames the whole work on a mat (nothing cropped). |
 | **Mat color** | `#141414` | Background behind matted art (hex). Dark avoids glare at night. |
-| **No-repeat memory** | 500 | Don't repeat the last *N* pieces (0 = allow repeats). |
+| **TV matte** (`tv_matte`) | `none` | `none` keeps the in-image fit; or a Samsung matte id (e.g. `modern_apricot`, `shadowbox_polar`) to have the **TV render a real mat** (art sent full-bleed). Unsupported ids fall back to none. |
+| **No-repeat memory** | 2000 | Don't repeat the last *N* pieces (0 = allow repeats). |
 | **Active hours** | *(blank)* | Blank = 24/7, or a local-time window like `07:00-23:00`. |
 | **Panel resolution** | 3840x2160 | Match your panel (1920x1080 for 32"/pre-2021). |
 | **Frame TV IP(s)** | *(blank)* | Blank = auto-discover; or comma-separated IPs to override. |
+| **Frame TV MAC(s)** (`tv_mac`) | *(blank)* | Optional. MAC(s) for a **Wake-on-LAN** nudge before a push retry, so a sleeping TV still updates. Comma-separated, paired with the IPs by position. |
 
-The sidebar **Frame Gallery** panel shows the current piece (title, artist,
-source) with a **Show next now** button for instant changes.
+The sidebar **REFRAMED Gallery** panel shows the current piece with its full
+details (title · artist · year · medium · movement, with Wikipedia links), a
+status pill with how many TVs were reached and when art last changed, and two
+buttons: **Show next** (pick a new piece) and **Re-push to TV** (re-send the
+current one, handy if a TV was off or got switched away).
+
+## Home Assistant entities (MQTT)
+
+With the Mosquitto broker app installed (auto-detected), REFRAMED Gallery
+exposes these over MQTT discovery:
+
+- **Current Art** sensor — the title, with `artist`, `year`, `medium`,
+  `movement`, `description`, `collection`, `matte`, `credit`, and `source`
+  attributes (great for a dashboard card or TTS).
+- **Next** button — change to a fresh piece now.
+- **Collection** select — switch collection (incl. `seasonal` / `weather`) live.
+- **Matte** select — switch the TV-rendered matte live.
+
+## TV-rendered mattes
+
+Set **TV matte** (or the HA Matte select) to a Samsung matte id and the Frame
+draws a real museum mat around the art instead of the flat in-image border — the
+image is sent full-bleed so it isn't double-framed. Matte ids look like
+`<style>_<color>` (e.g. `shadowbox_polar`, `modern_apricot`). Which ones a TV
+supports varies by model/year; if the Frame rejects an id, the push automatically
+falls back to no matte rather than failing.
+
+## Weather-aware art
+
+Set **Collection** to `weather` and pick a **Weather entity**, and each change
+maps the current condition to a fitting reframed collection — rain → nocturnes,
+snow → winter, sun → summer, fog → mountains, and so on — falling back to the
+season for conditions it doesn't recognise. No LLM, no weather API, no key; it
+just reads the condition Home Assistant already has.
 
 ## Content safety
 

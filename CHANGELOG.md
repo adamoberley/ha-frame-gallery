@@ -1,5 +1,42 @@
 # Changelog
 
+## REFRAMED Gallery 0.5.0 — 2026-06-25
+
+A feature pass inspired by [Docent](https://github.com/danmunz/docent) — richer
+art info, a reworked panel, sturdier TV pushing, TV-rendered mattes, and
+weather-aware art. No LLMs, no API keys, no captions burned into the image.
+
+- **Richer artwork details** — the Art Institute source now also pulls **year,
+  medium, and movement**, surfaced on the panel and in the *Current Art* sensor's
+  attributes. Title / artist / year become quiet **Wikipedia "learn more" links**
+  on the panel (hover to reveal) — context without altering the artwork.
+- **Reworked control panel** — a larger hero preview; a full caption
+  (title · artist · year · medium · movement · source); a status pill showing
+  **how many TVs were reached** and a relative "changed N min ago"; collection and
+  matte chips; and the browser-tab favicon tints to the current piece.
+- **Re-push button** — re-send the current image to the TV(s) without picking a new
+  piece (handy when a TV was off or got switched away). Replaces in place.
+- **Sturdier TV pushing** — the connect step now **retries with backoff** and,
+  given a TV MAC, sends a **Wake-on-LAN** nudge before retrying; the upload itself
+  runs exactly once on a verified-live connection, so a lost ack can't duplicate
+  art. A definitive TV rejection isn't retried. New **`tv_mac`** option.
+- **TV-rendered mattes** — new **`tv_matte`** option (and a **Matte** select in HA)
+  to have the Frame draw a real museum mat (e.g. `modern_apricot`,
+  `shadowbox_polar`); art is sent full-bleed so it isn't double-framed, and an
+  unsupported matte id falls back to none.
+- **Weather-aware art** — set Collection to **`weather`** with a **`weather_entity`**
+  to map the current HA condition to a fitting collection (rain → nocturnes,
+  snow → winter, sun → summer…), falling back to the season.
+- **`/healthz` endpoint** — JSON health (status, last change, TVs reached) for
+  container/uptime monitoring.
+
+## LedFX 1.0.2 — 2026-06-25
+
+- Fix the blank/black web UI: the HASS frontend set the React Router `basename`
+  to `"."` (normalised to `"/."`, which matches no URL), so it rendered nothing.
+  Set it to the actual mount path so the UI renders at the LAN root and under the
+  ingress sub-path.
+
 ## Local Faces 0.5.0 — 2026-06-25
 
 - **Desktop split layout** — on wider screens the live camera preview now sits in
@@ -24,7 +61,7 @@
 
 ## LedFX 1.0.0 — 2026-06-25
 
-First release of a third add-on in this repository: **LedFX**, the real-time,
+First release of a third app in this repository: **LedFX**, the real-time,
 audio-reactive LED controller, running natively on Home Assistant OS.
 
 - Ships the **LedFX engine pinned just past 2.1.9** (upstream commit `90bebef8`)
@@ -35,11 +72,11 @@ audio-reactive LED controller, running natively on Home Assistant OS.
   Nabu Casa), not just on `localhost`. The frontend was patched to use its own
   origin instead of a hard-coded `localhost:8888`, with a stale-host auto-clear.
 - **Reachable on the LAN** — the engine binds `0.0.0.0`, so `http://<ha-ip>:8888`
-  works directly (the community add-on bound `127.0.0.1` and couldn't be reached).
+  works directly (the community app bound `127.0.0.1` and couldn't be reached).
 - **Audio via Sendspin** — takes its audio from **Music Assistant** over the
   Sendspin protocol: no sound card, no second machine, no VBAN-from-a-PC.
 - **De-branded** packaging (clean name, icon, logo, panel; no devil-emoji icon or
-  "Blade" add-on branding) and a single `log_level` option; the rest lives in the
+  "Blade" app branding) and a single `log_level` option; the rest lives in the
   LedFX UI and persists in `/data`.
 
 ## Local Faces 0.3.0 — 2026-06-21
@@ -72,7 +109,7 @@ audio-reactive LED controller, running natively on Home Assistant OS.
 
 ## Local Faces 0.1.0 — 2026-06-21
 
-First release of a second add-on in this repository.
+First release of a second app in this repository.
 
 - **On-device, open-source face recognition** for Home Assistant: pulls frames
   from an RTSP/HTTP stream (or polled snapshot URL), detects faces, and matches
@@ -84,7 +121,7 @@ First release of a second add-on in this repository.
   camera or uploading a photo; live annotated view; a recognition log with
   snapshot thumbnails.
 - **HA integration:** publishes a `Recognized Name` sensor via MQTT discovery
-  (auto-detects the Mosquitto broker add-on); optional push notification via any
+  (auto-detects the Mosquitto broker app); optional push notification via any
   HA notify service, with a per-identity cooldown.
 - **Local by default:** recognition, enrollment, and the log never leave the box;
   only a notification can.
