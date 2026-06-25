@@ -1,23 +1,28 @@
 #!/usr/bin/env python3
 """Make the bundled LedFX web UI work under Home Assistant ingress.
 
-The stock frontend resolves its backend like this (minified):
+Two fixes are applied to the (minified) frontend, both required for it to run
+behind the HA ingress proxy *and* on the LAN:
 
-    host = isStandaloneApp() ? "http://localhost:8888"
-                             : window.location.href.split("#")[0]
+1. Backend host. The stock frontend resolves its backend as:
 
-Behind the HA ingress proxy (and on first load before a host is cached) it can
-take the ``localhost:8888`` branch, so every API call and the data WebSocket
-target the *browser's* machine instead of the add-on - hence "no core found",
-dead graphs, and failed edits. It also caches the chosen host in
-``localStorage["ledfx-frontend"]``, so a bad value sticks.
+       host = isStandaloneApp() ? "http://localhost:8888"
+                                : window.location.href.split("#")[0]
 
-We rewrite that hard-coded fallback to use the page's own origin. The WebSocket
-URL is already derived from ``window.location``, so this single change makes the
-exact same build work both under ingress (``wss://…/<token>/api/websocket``) and
-directly on the LAN. We also de-brand the page title and clear any stale cached
-``localhost`` host on load.
+   Behind ingress (and on first load) it can take the ``localhost:8888`` branch,
+   so every API call and the data WebSocket target the *browser's* machine.
+   We rewrite that hard-coded fallback to the page's own origin.
 
+2. Router basename. This is the HASS-optimised build (``PUBLIC_URL="."``), which
+   gives the relative asset paths ingress needs — but it also sets the React
+   Router to ``basename:"."``, which the router normalises to ``"/."``. No real
+   URL starts with ``/.``, so the router "won't render anything" → a blank page
+   (confirmed via the browser console). We replace it with the *actual mount
+   path* (``new URL(document.baseURI).pathname``): ``/`` on the LAN, and
+   ``/api/hassio_ingress/<token>/`` under ingress — so the router matches and
+   renders in both.
+
+We also de-brand the page title and clear any stale cached ``localhost`` host.
 Idempotent: safe to run more than once.
 """
 from __future__ import annotations
@@ -28,34 +33,51 @@ import os
 import ledfx_frontend
 
 ROOT = os.path.dirname(ledfx_frontend.__file__)
-# A JS expression that yields the current origin+path with the hash stripped -
-# exactly what the non-standalone branch already uses.
+
+# A JS expression yielding the current origin+path (hash stripped) - what the
+# non-standalone branch already uses.
 ORIGIN_EXPR = '(window.location.href.split("#")[0])'
-FALLBACKS = ('"http://localhost:8888"', '"https://ledfx.local:8889"')
+HOST_FALLBACKS = ('"http://localhost:8888"', '"https://ledfx.local:8889"')
+
+# React Router basename: "." normalises to "/." and matches nothing. Use the
+# real mount path so it works at the LAN root and under the ingress sub-path.
+BASENAME_BUG = 'basename:"."'
+BASENAME_FIX = "basename:new URL(document.baseURI).pathname"
 
 
 def patch_js() -> None:
-    total = 0
+    host_total = base_total = 0
     for path in glob.glob(os.path.join(ROOT, "static", "js", "*.js")):
         with open(path, encoding="utf-8") as handle:
-            src = handle.read()
-        hits = sum(src.count(token) for token in FALLBACKS)
-        if not hits:
-            continue
-        for token in FALLBACKS:
+            src = original = handle.read()
+
+        host_hits = sum(src.count(token) for token in HOST_FALLBACKS)
+        for token in HOST_FALLBACKS:
             src = src.replace(token, ORIGIN_EXPR)
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write(src)
-        total += hits
-        print(f"[patch] {os.path.basename(path)}: rewrote {hits} backend-host fallback(s)")
-    if not total:
-        print("[patch] WARNING: no localhost fallbacks found - frontend layout may have changed")
+
+        base_hits = src.count(BASENAME_BUG)
+        src = src.replace(BASENAME_BUG, BASENAME_FIX)
+
+        if src != original:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(src)
+            host_total += host_hits
+            base_total += base_hits
+            print(
+                f"[patch] {os.path.basename(path)}: "
+                f"{host_hits} host fallback(s), {base_hits} router-basename fix(es)"
+            )
+
+    if not host_total:
+        print("[patch] WARNING: no localhost host fallbacks found - frontend may have changed")
+    if not base_total:
+        print("[patch] WARNING: no 'basename:\".\"' found - the blank-page fix did NOT apply")
 
 
 def patch_index() -> None:
     index = os.path.join(ROOT, "index.html")
     with open(index, encoding="utf-8") as handle:
-        html = html_orig = handle.read()
+        html = original = handle.read()
 
     html = html.replace("LedFx Client - by Blade", "LedFX for Home Assistant")
 
@@ -66,7 +88,7 @@ def patch_index() -> None:
     if cleaner not in html:
         html = html.replace("<head>", "<head>" + cleaner, 1)
 
-    if html != html_orig:
+    if html != original:
         with open(index, "w", encoding="utf-8") as handle:
             handle.write(html)
         print("[patch] index.html: de-branded title + stale-host cleaner injected")

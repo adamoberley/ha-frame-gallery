@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2 — 2026-06-25
+
+- **Fix the blank/black web UI.** The HASS frontend build set the React Router
+  `basename` to `"."`, which normalises to `"/."` — and since no URL starts with
+  `/.`, the router rendered nothing (blank page on both ingress and the LAN). We
+  now set the basename to the actual mount path (`new URL(document.baseURI).pathname`),
+  so it matches and renders at the LAN root **and** under the ingress sub-path.
+
 ## 1.0.1 — 2026-06-25
 
 - **Fix a startup crash on boxes with no sound card** ("tuple index out of range"
