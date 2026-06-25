@@ -30,6 +30,24 @@ weather-aware art. No LLMs, no API keys, no captions burned into the image.
 - **`/healthz` endpoint** — JSON health (status, last change, TVs reached) for
   container/uptime monitoring.
 
+## LedFX 1.1.0–1.1.2 — 2026-06-25
+
+A polish pass — see [`ledfx/CHANGELOG.md`](ledfx/CHANGELOG.md) for the per-release
+detail.
+
+- **Home Assistant MQTT integration on by default**, auto-configured from your
+  Mosquitto broker (no credentials to enter) via `services: mqtt:want`. Exposes
+  the standard LedFX entities (a light per virtual, scene/audio/transition
+  selects, play/pause, pixel sensor) — that set is an upstream limit.
+- **No onboarding wizard** — auto-scans for WLED on start (`scan_on_startup`);
+  re-scan from Settings.
+- **De-Blade** — removed the "BLADE MOD" sidebar badge and the "Blade Scene"
+  onboarding step/strings.
+- **Ingress stability** — the UI always points at the live origin, fixing the host
+  404s and a reload loop caused by the rotating ingress token.
+- **`sendspin_delay_ms` option** — delay the Sendspin audio to line the lights up
+  with your speakers (the in-UI delay control is buggy for Sendspin).
+
 ## LedFX 1.0.2 — 2026-06-25
 
 - Fix the blank/black web UI: the HASS frontend set the React Router `basename`

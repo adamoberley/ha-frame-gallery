@@ -16,7 +16,7 @@ instead of bolting on a cloud account or a second machine.
 | --- | --- | --- |
 | **[REFRAMED Gallery](frame_gallery/DOCS.md)** | Curated public-domain art on a Samsung **The Frame** TV — switches daily, never repeats, replaces in place | `0.5.0` |
 | **[Local Faces](local_faces/DOCS.md)** | On-device **face recognition** from your cameras — recognized names become an HA sensor | `0.5.0` |
-| **[LedFX](ledfx/DOCS.md)** | Real-time **audio-reactive lighting** for WLED, fed by Music Assistant over Sendspin | `1.0.2` |
+| **[LedFX](ledfx/DOCS.md)** | Real-time **audio-reactive lighting** for WLED, fed by Music Assistant over Sendspin | `1.1.2` |
 
 ## Install
 
@@ -103,10 +103,14 @@ experience:
 - **Ingress that actually works** — the web UI runs in the HA sidebar (and via Nabu
   Casa), not just on `localhost`; also reachable directly at `http://<ha-ip>:8888`.
 - **Audio with no hardware** — Sendspin from Music Assistant (2.7+); no mic, no
-  loopback, no capture card.
+  loopback, no capture card. An optional `sendspin_delay_ms` lines the lights up
+  with your speakers.
+- **Zero-config** — no setup wizard: it **auto-scans for WLED** on start, and the
+  **Home Assistant (MQTT)** integration turns on automatically using your
+  Mosquitto broker (no credentials to enter).
 - **De-branded** — clean name, icon, logo, and sidebar panel.
 - A recent LedFX engine (pinned just past 2.1.9 for the Sendspin watchdog fix and
-  now-playing metadata), with an optional Home Assistant (MQTT) integration.
+  now-playing metadata).
 
 > **Heads up:** LedFX is under active development and getting a larger overhaul, so
 > expect things to move. See [`ledfx/CHANGELOG.md`](ledfx/CHANGELOG.md) for the
@@ -131,8 +135,19 @@ experience:
 Each app is a self-contained folder — `frame_gallery/`, `local_faces/`,
 `ledfx/` — with its own `Dockerfile`, `config.yaml` (manifest + version + options
 schema), and `DOCS.md`. Versions are bumped independently in each `config.yaml`;
-release notes for all three live in [`CHANGELOG.md`](CHANGELOG.md). Python is
+release notes live in the repo-wide [`CHANGELOG.md`](CHANGELOG.md) (LedFX also
+keeps a per-app `ledfx/CHANGELOG.md` for its in-app Changelog tab). Python is
 linted with [ruff](https://docs.astral.sh/ruff/) (`ruff.toml`).
+
+**Why one repo (not branches per app):** this is the standard Home Assistant
+*app/add-on repository* layout — the Supervisor reads every app folder from a
+**single branch** (`main`), so one repository URL exposes all three in the store.
+Separate branches wouldn't "come together": HA only ever reads one branch, so they
+can't form a unified store, and you'd lose the one-URL install. The folder-per-app
++ independent `config.yaml` versions you have here *is* the best-practice way to
+keep three apps tidy in one repo. (Splitting into three separate repos is possible
+but means three URLs to add and three READMEs to maintain — more overhead, not
+less, for a personal collection.)
 
 ## Credits & license
 

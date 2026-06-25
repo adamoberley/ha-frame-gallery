@@ -81,6 +81,7 @@ looks.
 | Option | Default | What it does |
 | --- | --- | --- |
 | **Log level** | `info` | `debug` is very chatty — use it only to troubleshoot, then switch back. |
+| **`sendspin_delay_ms`** | `0` | Delay (ms, 0–5000) applied to the Sendspin audio so the lights line up with your speakers. **Set it here, not in the LedFX UI** — the UI's delay control is buggy for Sendspin (it resets the audio source). Restart the app to apply, and tune by eye against the music. |
 
 That's it — everything else is configured inside the LedFX UI and persists in the
 app's `/data`.
