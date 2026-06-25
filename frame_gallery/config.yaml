@@ -6,7 +6,7 @@
 # piles up) and never repeating recent pieces. Switches daily (or on your own
 # interval); no automation needed.
 name: REFRAMED Gallery
-version: "0.4.1"
+version: "0.5.0"
 slug: frame_gallery
 description: >-
   Curated public-domain art on your Samsung Frame TV from reframed.gallery -
@@ -37,24 +37,31 @@ panel_title: REFRAMED Gallery
 map:
   - "homeassistant_config:ro"
 
+# Read-only access to the HA core API, so the "weather" collection can read your
+# weather entity's condition. Only used when weather_entity is set.
+homeassistant_api: true
+
 # MQTT (auto-detected from the Mosquitto add-on) powers the HA entities:
-# a Current Art sensor, a Next button, and a Collection select.
+# a Current Art sensor, a Next button, a Collection select, and a Matte select.
 services:
   - mqtt:want
 
 options:
   tv_ip: ""
+  tv_mac: ""
   interval_minutes: 1440
   daily_time: "04:00"
   source: "reframed"
   collection: "seasonal"
   hemisphere: "north"
+  weather_entity: ""
   resolution: "3840x2160"
   query: ""
   public_domain_only: true
   exclude_keywords: "nude, naked, nudity, erotic, explicit"
   fit: "crop"
   mat_color: "#141414"
+  tv_matte: "none"
   active_hours: ""
   avoid_repeat_count: 2000
   enable_mqtt: true
@@ -68,6 +75,9 @@ schema:
   # Frame TV IP(s). Blank = auto-discover from your samsungtv integration; or
   # comma-separated IPs to override. First run shows an "Allow" prompt on the TV.
   tv_ip: "str?"
+  # Optional Frame TV MAC address(es) for Wake-on-LAN before a push retry, so a
+  # sleeping TV still updates. Comma-separated, paired with tv_ip by position.
+  tv_mac: "str?"
   # How often a new piece is chosen and pushed.
   interval_minutes: "int(1,1440)"
   # Time of day to switch art (HH:MM, local), e.g. "04:00". Blank = use the interval.
@@ -77,11 +87,15 @@ schema:
   # full public-domain catalogue (huge, but lots of non-painting objects).
   source: "list(reframed|artic)"
   # reframed only: which collection to pull. "seasonal" auto-tracks the date
-  # (Winter/Spring/Summer/Fall, December = Christmas); "all" = whole catalogue; or a
-  # collection slug like "by-the-sea", "golden-hour", "nocturnes-moonlight".
+  # (Winter/Spring/Summer/Fall, December = Christmas); "weather" tracks your
+  # weather_entity's condition; "all" = whole catalogue; or a collection slug like
+  # "by-the-sea", "golden-hour", "nocturnes-moonlight".
   collection: "str?"
   # Hemisphere for "seasonal" (flips the calendar for the Southern hemisphere).
   hemisphere: "list(north|south)"
+  # reframed "weather" collection: the HA weather entity to read, e.g.
+  # "weather.home". Maps rain->nocturnes, snow->winter, sun->summer, etc.
+  weather_entity: "str?"
   resolution: "list(3840x2160|1920x1080)"
   # Free-text art search to shape the collection, e.g. "landscape",
   # "impressionism", "ukiyo-e", "still life". Blank = all public-domain works.
@@ -96,6 +110,10 @@ schema:
   fit: "list(matte|crop)"
   # Mat colour behind matted art (hex).
   mat_color: "str?"
+  # TV-rendered matte: "none" keeps the in-image fit; or a Samsung matte id like
+  # "modern_apricot", "shadowbox_polar". The TV draws the mat (art sent full-bleed);
+  # unsupported ids fall back to none. Switchable live via the HA Matte select.
+  tv_matte: "str?"
   # Blank = run 24/7, or a local-time window like "07:00-23:00".
   active_hours: "str?"
   # Don't repeat the last N pieces (0 = allow repeats).

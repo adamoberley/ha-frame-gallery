@@ -20,6 +20,12 @@ class Artwork:
     public_domain: bool = True
     tags: str = ""          # lowercased searchable text, for keyword filtering
     credit: str = ""
+    # Optional descriptive metadata, surfaced in the panel + HA (not all sources
+    # provide these; they default empty and the UI hides what's blank).
+    year: str = ""          # e.g. "1889" or "c. 1500-1510"
+    medium: str = ""        # e.g. "Oil on canvas"
+    movement: str = ""      # style/movement, e.g. "Post-Impressionism"
+    description: str = ""   # short blurb, if the source has one
 
     @property
     def key(self) -> str:

@@ -1,22 +1,22 @@
-# Adam Oberley's Home Assistant Apps (Add-ons)
+# Adam Oberley's Home Assistant Apps
 
-*A small collection of **local-first** Home Assistant apps (add-ons) — each one runs
+*A small collection of **local-first** Home Assistant apps — each one runs
 natively on Home Assistant OS, does its work on your own box, and keeps your data
 off the cloud.*
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Home Assistant add-on](https://img.shields.io/badge/Home%20Assistant-add--on-41BDF5.svg)](https://www.home-assistant.io/)
+[![Home Assistant app](https://img.shields.io/badge/Home%20Assistant-app-41BDF5.svg)](https://www.home-assistant.io/)
 
-These are three independent add-ons that happen to share a philosophy: do the work
+These are three independent apps that happen to share a philosophy: do the work
 **on-device**, keep your data **local**, and fit into Home Assistant *properly* —
 sidebar ingress, MQTT entities, auto-discovery from integrations you already have —
 instead of bolting on a cloud account or a second machine.
 
-| Add-on | What it does | Version |
+| App | What it does | Version |
 | --- | --- | --- |
-| **[REFRAMED Gallery](frame_gallery/DOCS.md)** | Curated public-domain art on a Samsung **The Frame** TV — switches daily, never repeats, replaces in place | `0.4.1` |
+| **[REFRAMED Gallery](frame_gallery/DOCS.md)** | Curated public-domain art on a Samsung **The Frame** TV — switches daily, never repeats, replaces in place | `0.5.0` |
 | **[Local Faces](local_faces/DOCS.md)** | On-device **face recognition** from your cameras — recognized names become an HA sensor | `0.5.0` |
-| **[LedFX](ledfx/DOCS.md)** | Real-time **audio-reactive lighting** for WLED, fed by Music Assistant over Sendspin | `1.0.1` |
+| **[LedFX](ledfx/DOCS.md)** | Real-time **audio-reactive lighting** for WLED, fed by Music Assistant over Sendspin | `1.0.2` |
 
 ## Install
 
@@ -28,10 +28,10 @@ want:
    [![Add repository to your Home Assistant.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fadamoberley%2Fha-addons)
 
    …or paste `https://github.com/adamoberley/ha-addons`.
-2. They appear in the store under **Adam Oberley's Home Assistant Apps (Add-ons)**.
+2. They appear in the store under **Adam Oberley's Home Assistant Apps**.
    Install one, **Start** it, and open its sidebar panel.
 
-Each add-on has its own setup guide (linked per section below). Most need little or
+Each app has its own setup guide (linked per section below). Most need little or
 no configuration.
 
 ---
@@ -53,10 +53,16 @@ Mode — **replacing** the previous upload so the art library never piles up, an
   Chicago**'s full catalogue, or shape either with a free-text `query`.
 - **Family-safe** — public-domain (CC0) works only by default, plus a keyword
   content filter you can tune.
-- **Fits your panel** — 4K or 1080p; cropped to fill, or matted like a framed print.
+- **Fits your panel** — 4K or 1080p; cropped to fill, matted like a framed print,
+  or with a **TV-rendered Samsung matte** (the Frame draws a real museum mat).
+- **Knows its art** — pulls **year, medium, and movement**, shown on the panel and
+  in the *Current Art* sensor, with quiet **Wikipedia "learn more" links**.
+- **Weather-aware (optional)** — point it at a weather entity and it picks a
+  collection to match the day (rain → nocturnes, snow → winter, sun → summer…).
 - **HA-native** — auto-discovers the Frame from the Samsung TV integration; exposes
-  a *Current Art* sensor, a *Next* button, and a *Collection* select over MQTT; a
-  sidebar panel shows the current piece with a "show next" button.
+  *Current Art*, *Next*, *Collection*, and *Matte* entities over MQTT; a reworked
+  sidebar panel shows the current piece (with details) plus *Show next* and
+  *Re-push to TV* buttons. Sturdy pushing with retry + optional Wake-on-LAN.
 
 → Full setup & options: [`frame_gallery/DOCS.md`](frame_gallery/DOCS.md)
 
@@ -78,7 +84,7 @@ known people, alert on an unknown at the door, announce arrivals.
   any recent sighting to blow it up and name it**, with name autocomplete so you
   can feed several shots of the same person and sharpen recognition over time.
 - **Local by default** — detection, enrollment, and the sighting log live in the
-  add-on's `/data`; only an optional push notification ever leaves your network.
+  app's `/data`; only an optional push notification ever leaves your network.
 
 → Full setup & tuning: [`local_faces/DOCS.md`](local_faces/DOCS.md)
 
@@ -87,11 +93,11 @@ known people, alert on an unknown at the door, announce arrivals.
 *Real-time, audio-reactive lighting — running natively on Home Assistant OS.*
 
 LedFX listens to your music and drives the colour and motion of your **WLED** (and
-other) lights in sync with it. This add-on runs the full engine on your HA box and
+other) lights in sync with it. This app runs the full engine on your HA box and
 takes its audio over the network from **Music Assistant** via the **Sendspin**
 protocol — **no sound card, no second mini-PC, no VBAN-from-a-PC**.
 
-It's a clean fork of the community LedFX add-on, fixed for a first-class HA
+It's a clean fork of the community LedFX app, fixed for a first-class HA
 experience:
 
 - **Ingress that actually works** — the web UI runs in the HA sidebar (and via Nabu
@@ -117,12 +123,12 @@ experience:
   The only thing that can leave is an optional notification you opt into.
 - **Native to Home Assistant OS.** Sidebar ingress (authenticated by HA — no extra
   login), MQTT discovery for entities, and auto-discovery from integrations you
-  already run. Everything is configured from the add-on UI; state lives in `/data`.
+  already run. Everything is configured from the app UI; state lives in `/data`.
 - **Runs on a Pi.** Multi-arch images (`aarch64` / `amd64` / `armv7`).
 
 ## Repo layout & development
 
-Each add-on is a self-contained folder — `frame_gallery/`, `local_faces/`,
+Each app is a self-contained folder — `frame_gallery/`, `local_faces/`,
 `ledfx/` — with its own `Dockerfile`, `config.yaml` (manifest + version + options
 schema), and `DOCS.md`. Versions are bumped independently in each `config.yaml`;
 release notes for all three live in [`CHANGELOG.md`](CHANGELOG.md). Python is
@@ -138,11 +144,11 @@ Code: **MIT** (see [LICENSE](LICENSE)).
   [Art Institute of Chicago API](https://api.artic.edu/docs/) (CC0 public-domain
   works). The TV-side approach (upload → select → delete, Art-Mode-aware push,
   auto-discovery) grew out of the
-  [Bird Frame](https://github.com/adamoberley/HABirdDashboard) add-on.
+  [Bird Frame](https://github.com/adamoberley/HABirdDashboard) app.
 - **Local Faces** uses YuNet + SFace from the
   [OpenCV Zoo](https://github.com/opencv/opencv_zoo).
 - **LedFX** is a fork of [LedFX](https://github.com/LedFx/LedFx) and the community
-  Home Assistant add-on.
+  Home Assistant app.
 
 Not affiliated with Samsung, any museum, the Home Assistant project, or the LedFX
 project.

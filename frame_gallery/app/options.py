@@ -11,6 +11,7 @@ OPTIONS_PATH = "/data/options.json"
 @dataclass(frozen=True)
 class Options:
     tv_ip: str
+    tv_mac: str
     interval_minutes: int
     daily_time: str
     width: int
@@ -19,10 +20,12 @@ class Options:
     source: str
     collection: str
     hemisphere: str
+    weather_entity: str
     public_domain_only: bool
     exclude_keywords: tuple
     fit: str
     mat_color: str
+    tv_matte: str
     active_hours: str
     avoid_repeat_count: int
     enable_mqtt: bool
@@ -59,6 +62,7 @@ def load() -> Options:
 
     return Options(
         tv_ip=str(raw.get("tv_ip", "")).strip(),
+        tv_mac=str(raw.get("tv_mac", "")).strip(),
         interval_minutes=int(raw.get("interval_minutes", 1440)),
         daily_time=str(raw.get("daily_time", "04:00")).strip(),
         width=width,
@@ -67,10 +71,12 @@ def load() -> Options:
         source=str(raw.get("source", "reframed")).strip() or "reframed",
         collection=str(raw.get("collection", "seasonal")).strip() or "seasonal",
         hemisphere=str(raw.get("hemisphere", "north")).strip() or "north",
+        weather_entity=str(raw.get("weather_entity", "")).strip(),
         public_domain_only=bool(raw.get("public_domain_only", True)),
         exclude_keywords=_keywords(raw.get("exclude_keywords", "")),
         fit=str(raw.get("fit", "crop")),
         mat_color=str(raw.get("mat_color", "#141414")).strip() or "#141414",
+        tv_matte=str(raw.get("tv_matte", "none")).strip() or "none",
         active_hours=str(raw.get("active_hours", "")).strip(),
         avoid_repeat_count=int(raw.get("avoid_repeat_count", 2000)),
         enable_mqtt=bool(raw.get("enable_mqtt", True)),

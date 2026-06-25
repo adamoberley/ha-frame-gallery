@@ -23,7 +23,8 @@ DEFAULT_IIIF = "https://www.artic.edu/iiif/2"
 IMG_WIDTH = 1920          # IIIF width; matted/scaled to the panel by imaging.py
 MAX_PAGE = 100            # offset cap (page*limit <= ~10000 per the AIC API)
 FIELDS = ("id,title,artist_title,image_id,is_public_domain,"
-          "department_title,classification_titles,term_titles")
+          "department_title,classification_titles,term_titles,"
+          "date_display,medium_display,style_title,short_description")
 HEADERS = {
     "User-Agent": "ha-addons/0.1 (+https://github.com/adamoberley/ha-addons)",
     "AIC-User-Agent": "ha-addons (adamoberley@damascus.net)",
@@ -95,5 +96,9 @@ class ArticSource(ArtSource):
                 public_domain=bool(it.get("is_public_domain")),
                 tags=tags,
                 credit="Art Institute of Chicago",
+                year=it.get("date_display") or "",
+                medium=it.get("medium_display") or "",
+                movement=it.get("style_title") or "",
+                description=(it.get("short_description") or "").strip(),
             ))
         return out
