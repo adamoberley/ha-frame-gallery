@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.6.0 — 2026-06-25
+
+- **Cleaner page header** — removed the little pixel QR-connect icon that sat
+  next to every page title. (It was a LAN "scan to connect a client" shortcut you
+  don't need under Home Assistant.)
+- **Readable read-only fields** — the greyed-out audio fields (Sample Rate, Mic
+  Rate, FFT Size) rendered at 50% opacity and were hard to read. They now use
+  Home Assistant's secondary-text colour, so they're legible while still reading
+  as read-only. (Added `--ha-text-secondary` to the HA variable bridge.)
+- The rest of the Settings panels and the effect editor were audited live and
+  already match HA well (dark surfaces, blue accents, tidy forms), so no
+  redesign — just these targeted refinements.
+
 ## 1.5.0 — 2026-06-25
 
 - **The slide-out menu header now matches too.** Opening the left navigation

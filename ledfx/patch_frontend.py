@@ -283,7 +283,9 @@ def patch_index() -> None:
         "'--primary-text-color'],'#212121','#e1e1e1');"
         "set('--ha-header-border',['--app-header-border-bottom'],"
         "'1px solid rgba(0,0,0,0.12)','1px solid rgba(255,255,255,0.12)');"
-        "set('--ha-header-height',['--header-height'],'56px','56px');}"
+        "set('--ha-header-height',['--header-height'],'56px','56px');"
+        "set('--ha-text-secondary',['--secondary-text-color'],"
+        "'#5e5e5e','#9b9b9b');}"
         "ro();try{if(window.parent&&window.parent!==window)"
         "new MutationObserver(ro).observe("
         "window.parent.document.documentElement,"
@@ -324,6 +326,15 @@ def patch_index() -> None:
         "!important}"
         ".MuiDrawer-paper>.MuiBox-root:first-child *{"
         "background-color:transparent!important}"
+        # Hide the QR-connect shortcut next to the page title for a cleaner
+        # header (shares the toolbar with the title; aria-label is stable).
+        ".MuiAppBar-root .MuiIconButton-root"
+        '[aria-label="Show QR Connect Hosts"]{display:none!important}'
+        # Read-only / disabled form fields default to 50% opacity and are hard to
+        # read; use HA's secondary-text color instead (theme-aware via bridge).
+        ".MuiInputBase-input.Mui-disabled,.MuiInputBase-input:disabled{"
+        "-webkit-text-fill-color:var(--ha-text-secondary,#9b9b9b)!important;"
+        "color:var(--ha-text-secondary,#9b9b9b)!important}"
         "</style>"
     )
     # Declutter the Home dashboard: hide the two 8-gauge stat rows (.hideTablet)
