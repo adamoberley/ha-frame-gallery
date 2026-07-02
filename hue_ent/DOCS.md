@@ -62,15 +62,26 @@ For each zone, add a **DDP** device in LedFX:
 - *Refresh rate*: match the zone's `fps`.
 
 Then play any effect on that device. With `auto_start` on, the zone arms as
-soon as frames flow and releases the lights ~30 s after they stop.
+soon as frames flow and releases the lights after `idle_timeout_s` (default
+30 s) once they stop.
 
 ## Home Assistant control
 
-Each zone appears as a switch — **Entertainment: \<zone\>** — via MQTT
+Each zone appears as a switch — named after the zone, so it shows up as
+**Hue Entertainment \<zone\>** (e.g. *Hue Entertainment Living Room*) — via MQTT
 discovery. Turning it on arms the zone (captures each bulb's current state,
 pauses `pause_entities`, starts streaming); turning it off stops streaming and
 **restores every bulb to its pre-session state**. Only one zone streams at a
 time; arming a second zone stops the first.
+
+**Off means off.** If you switch a zone off by hand while LedFX is still
+sending, it stays off — it won't immediately re-arm from the live stream. It
+arms again automatically only once that stream stops and a *new* one begins (or
+when you turn the switch back on). So you can silence a room mid-song without
+fighting the auto-start.
+
+Stopping or restarting the app disarms every zone cleanly first, restoring the
+bulbs — they won't get stranded mid-effect.
 
 Automation ideas: turn the switch on when your media player starts and off when
 it stops, or expose it on a dashboard next to your LedFX panel.
