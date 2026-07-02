@@ -16,6 +16,7 @@ import contextlib
 import json
 import logging
 import os
+import signal
 import time
 import urllib.request
 
@@ -102,10 +103,25 @@ class ZoneRunner:
         self._ticker: asyncio.Task | None = None
         self._last_zig_send = 0.0
         self._last_sent_frame: list[tuple[int, int, int]] | None = None
+        # Set by a manual switch-off: don't auto-arm again for the SAME DDP
+        # stream - only once it stops (>5 s gap) and a new one begins.
+        self._suppress_auto = False
+        self._prev_rx = 0.0
 
     def on_ddp_activity(self) -> None:
-        if not self.armed and self.zone.auto_start:
+        now = time.monotonic()
+        stream_gap = now - self._prev_rx if self._prev_rx else float("inf")
+        self._prev_rx = now
+        if self._suppress_auto and stream_gap > 5.0:
+            LOG.info("[%s] new DDP stream detected - auto-start re-enabled", self.zone.name)
+            self._suppress_auto = False
+        if not self.armed and self.zone.auto_start and not self._suppress_auto:
             self.bridge.schedule_arm(self.zone.slug, reason="ddp")
+
+    def manual_off(self) -> asyncio.Task:
+        """Switch turned off in HA: stay off for the rest of this DDP stream."""
+        self._suppress_auto = True
+        return asyncio.get_running_loop().create_task(self.disarm())
 
     # -- lifecycle -------------------------------------------------------
 
@@ -260,14 +276,19 @@ class Bridge:
         self.nwk: dict[str, int] = {}
         self.light_states: dict[str, dict] = {}
         self.client: aiomqtt.Client | None = None
+        self.stopping = False
         self._pending_arms: set[str] = set()
 
     async def publish(self, topic: str, payload: str, retain: bool = False) -> None:
-        if self.client is not None:
+        if self.client is None:
+            return
+        try:
             await self.client.publish(topic, payload, qos=0, retain=retain)
+        except aiomqtt.MqttError as exc:
+            LOG.debug("publish to %s failed: %s", topic, exc)
 
     def schedule_arm(self, slug: str, reason: str) -> None:
-        if slug in self._pending_arms:
+        if self.stopping or slug in self._pending_arms:
             return
         self._pending_arms.add(slug)
 
@@ -286,6 +307,12 @@ class Bridge:
             if other_slug != slug and runner.armed:
                 LOG.info("zone '%s' requested while '%s' active - stopping it", slug, other_slug)
                 await runner.disarm()
+        deadline = time.monotonic() + 5.0
+        while (
+            any(fn not in self.nwk for fn in self.zones[slug].lights)
+            and time.monotonic() < deadline
+        ):
+            await asyncio.sleep(0.2)
         missing = [fn for fn in self.zones[slug].lights if fn not in self.nwk]
         if missing:
             LOG.error(
@@ -333,7 +360,7 @@ class Bridge:
         }
         for zone in self.zones.values():
             config = {
-                "name": f"Entertainment: {zone.name}",
+                "name": zone.name,  # device name provides the "Hue Entertainment" context
                 "unique_id": f"hue_ent_{zone.slug}",
                 "command_topic": zone.switch_command_topic,
                 "state_topic": zone.switch_state_topic,
@@ -348,6 +375,9 @@ class Bridge:
                 json.dumps(config),
                 retain=True,
             )
+            # Seed the retained state so the entity isn't "unknown" on first boot.
+            state = "ON" if self.runners[zone.slug].armed else "OFF"
+            await self.publish(zone.switch_state_topic, state, retain=True)
 
     def handle_message(self, topic: str, payload: bytes) -> None:
         if topic == f"{Z2M_BASE}/bridge/devices":
@@ -366,7 +396,7 @@ class Bridge:
                 if want_on:
                     self.schedule_arm(zone.slug, reason="switch")
                 else:
-                    asyncio.get_running_loop().create_task(self.runners[zone.slug].disarm())
+                    self.runners[zone.slug].manual_off()
                 return
             for fn in zone.lights:
                 if topic == f"{Z2M_BASE}/{fn}":
@@ -410,8 +440,13 @@ class Bridge:
                             await client.subscribe(f"{Z2M_BASE}/{fn}")
                     await self.publish_discovery()
                     await self.publish(AVAILABILITY_TOPIC, "online", retain=True)
-                    async for message in client.messages:
-                        self.handle_message(str(message.topic), bytes(message.payload))
+                    try:
+                        async for message in client.messages:
+                            self.handle_message(str(message.topic), bytes(message.payload))
+                    except asyncio.CancelledError:
+                        LOG.info("shutdown signal received - restoring zones")
+                        await self.shutdown()
+                        raise
             except aiomqtt.MqttError as exc:
                 self.client = None
                 for runner in self.runners.values():
@@ -420,6 +455,7 @@ class Bridge:
                 await asyncio.sleep(5)
 
     async def shutdown(self) -> None:
+        self.stopping = True
         for runner in self.runners.values():
             if runner.armed:
                 await runner.disarm()
@@ -438,10 +474,12 @@ async def async_main() -> None:
         while True:
             await asyncio.sleep(3600)
     bridge = Bridge(zones)
-    try:
+    loop = asyncio.get_running_loop()
+    main_task = asyncio.current_task()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, main_task.cancel)
+    with contextlib.suppress(asyncio.CancelledError):
         await bridge.run()
-    finally:
-        await bridge.shutdown()
 
 
 def main() -> None:
