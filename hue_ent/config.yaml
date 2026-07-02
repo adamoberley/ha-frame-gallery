@@ -7,7 +7,7 @@
 # entertainment commands aimed at one "proxy" bulb per zone, which re-broadcasts
 # to the rest. Requires zigbee2mqtt >= 2.1.1 and color-capable Hue bulbs.
 name: Hue Entertainment
-version: "0.1.0"
+version: "0.2.0"
 slug: hue_ent
 description: >-
   Audio-reactive Hue: stream LedFX effects to Philips Hue Zigbee bulbs on
@@ -36,11 +36,21 @@ homeassistant_api: true
 
 options:
   log_level: info
+  ledfx_url: "http://127.0.0.1:8888"
+  ledfx_ddp_target: "127.0.0.1"
   zones: []
 
 schema:
   # App log verbosity.
   log_level: list(debug|info|warning|error)
+  # LedFX API base URL for auto-provisioning: the app creates one matching DDP
+  # device per zone in LedFX (named "Hue <zone>"), so there's nothing to mirror
+  # by hand. The default reaches the LedFX app on the same host. Set it to an
+  # empty string to disable auto-provisioning.
+  ledfx_url: str
+  # The address LedFX should send DDP to - i.e. where THIS app is reachable
+  # from LedFX. Leave at 127.0.0.1 when both apps run on the same host.
+  ledfx_ddp_target: str
   # One entry per entertainment zone. Lights are zigbee2mqtt friendly names, in
   # pixel order (arrange them along the room so 1-D effects sweep spatially).
   # A zone is capped at 10 lights by the Zigbee frame format. The proxy bulb

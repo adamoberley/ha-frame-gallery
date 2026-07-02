@@ -4,6 +4,17 @@ configuration:
     description: >-
       App log verbosity. 'debug' logs every state transition - use it only when
       troubleshooting.
+  ledfx_url:
+    name: LedFX URL
+    description: >-
+      LedFX API base URL. On start the app auto-creates one matching DDP device
+      per zone in LedFX (named "Hue <zone>") - no manual mirroring. Default
+      reaches the LedFX app on this host. Set empty to disable.
+  ledfx_ddp_target:
+    name: LedFX DDP target
+    description: >-
+      The address LedFX sends pixel data to (where this app listens). Leave at
+      127.0.0.1 unless LedFX runs on a different machine.
   zones:
     name: Zones
     description: >-

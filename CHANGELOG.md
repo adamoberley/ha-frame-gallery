@@ -1,5 +1,11 @@
 # Changelog
 
+## Hue Entertainment 0.2.0 — 2026-07-02
+
+LedFX auto-provisioning: the app now creates one matching DDP device per zone
+in LedFX through its API — configure zones once, pick effects in LedFX, done.
+New `ledfx_url` / `ledfx_ddp_target` options (empty URL disables it).
+
 ## Hue Entertainment 0.1.0 — 2026-07-02
 
 New app: stream LedFX effects to Philips Hue Zigbee bulbs on zigbee2mqtt at

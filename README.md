@@ -147,8 +147,9 @@ special coordinator firmware.
   for that room; disarming **restores every bulb** to exactly where it was. Auto-arms
   when LedFX starts sending and releases the lights when the music stops — and *off
   means off* if you kill a zone by hand mid-song.
-- **Feeds straight from LedFX** — add one DDP device per zone in the LedFX app
-  (also in this repo) and any effect drives your Hue bulbs.
+- **Feeds straight from LedFX, zero mirroring** — it auto-creates one matching
+  DDP device per zone in the LedFX app (also in this repo) through LedFX's API;
+  you just pick effects.
 
 > **Heads up:** this rides a reverse-engineered protocol, so treat it as
 > experimental. It's been validated end-to-end on real hardware, but firmware and
