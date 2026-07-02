@@ -1,0 +1,61 @@
+# Hue Entertainment - Home Assistant app manifest.
+#
+# Streams LedFX pixel output to Philips Hue bulbs paired to zigbee2mqtt (no Hue
+# Bridge) at 20-25 fps, using the reverse-engineered Hue Entertainment Zigbee
+# protocol through Z2M's generic zclcommand passthrough. LedFX sends each zone
+# as a small DDP stream (one pixel per bulb); this app converts frames to
+# entertainment commands aimed at one "proxy" bulb per zone, which re-broadcasts
+# to the rest. Requires zigbee2mqtt >= 2.1.1 and color-capable Hue bulbs.
+name: Hue Entertainment
+version: "0.1.0"
+slug: hue_ent
+description: >-
+  Audio-reactive Hue: stream LedFX effects to Philips Hue Zigbee bulbs on
+  zigbee2mqtt at 20-25 fps - no Hue Bridge, no per-bulb command spam.
+url: https://github.com/adamoberley/ha-addons/tree/main/hue_ent
+
+arch:
+  - aarch64
+  - amd64
+
+init: false
+startup: application
+boot: auto
+
+# host_network so the LedFX app (also host_network) can reach the per-zone DDP
+# UDP listeners directly on the host address.
+host_network: true
+
+# Auto-discover the co-located Mosquitto broker credentials from the Supervisor.
+services:
+  - mqtt:need
+
+# Used to pause/resume the configured pause_entities (e.g. an Adaptive Lighting
+# switch) around a streaming session via the Core service API.
+homeassistant_api: true
+
+options:
+  log_level: info
+  zones: []
+
+schema:
+  # App log verbosity.
+  log_level: list(debug|info|warning|error)
+  # One entry per entertainment zone. Lights are zigbee2mqtt friendly names, in
+  # pixel order (arrange them along the room so 1-D effects sweep spatially).
+  # A zone is capped at 10 lights by the Zigbee frame format. The proxy bulb
+  # re-broadcasts frames and must be in radio range of every other bulb in the
+  # zone (defaults to the first light). Every zone needs its own ddp_port
+  # (defaults to 4048 + zone index).
+  zones:
+    - name: str
+      lights:
+        - str
+      proxy: str?
+      fps: int(5,25)?
+      ddp_port: port?
+      idle_timeout_s: int(5,600)?
+      auto_start: bool?
+      brightness_scale: float(0.05,1.0)?
+      pause_entities:
+        - str?

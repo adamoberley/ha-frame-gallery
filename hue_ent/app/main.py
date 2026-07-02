@@ -1,0 +1,453 @@
+"""Hue Entertainment bridge daemon.
+
+Receives per-zone pixel streams from LedFX (DDP, one pixel per bulb) and drives
+Philips Hue bulbs on zigbee2mqtt at 20-25 fps via the reverse-engineered Hue
+Entertainment Zigbee protocol (see protocol.py). One HA switch per zone (MQTT
+discovery) arms/disarms streaming; arming captures each bulb's state and
+disarming restores it, so normal Home Assistant control is untouched outside a
+session. Optional per-zone ``pause_entities`` (e.g. an Adaptive Lighting
+switch) are turned off while streaming and back on afterwards.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import json
+import logging
+import os
+import time
+import urllib.request
+
+import aiomqtt
+
+from . import color, protocol
+
+LOG = logging.getLogger("hue_ent")
+
+Z2M_BASE = os.environ.get("Z2M_BASE_TOPIC", "zigbee2mqtt")
+DISCOVERY_PREFIX = os.environ.get("DISCOVERY_PREFIX", "homeassistant")
+BASE_TOPIC = "hue_ent"
+AVAILABILITY_TOPIC = f"{BASE_TOPIC}/availability"
+KEEPALIVE_S = 4.0  # bulbs drop out of entertainment mode after a few silent seconds
+REARM_GAP_S = 6.0  # a zigbee-send gap longer than this means the mode has expired
+
+
+def load_options() -> dict:
+    path = os.environ.get("OPTIONS_FILE", "/data/options.json")
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+class Zone:
+    def __init__(self, cfg: dict, index: int):
+        self.name: str = cfg["name"]
+        self.slug = "".join(ch if ch.isalnum() else "_" for ch in self.name.lower()).strip("_")
+        self.lights: list[str] = list(cfg["lights"])
+        if not self.lights:
+            raise ValueError(f"zone '{self.name}' has no lights")
+        if len(self.lights) > protocol.MAX_LIGHTS_PER_FRAME:
+            raise ValueError(
+                f"zone '{self.name}' has {len(self.lights)} lights; the protocol caps a zone at "
+                f"{protocol.MAX_LIGHTS_PER_FRAME}"
+            )
+        self.proxy: str = cfg.get("proxy") or self.lights[0]
+        if self.proxy not in self.lights:
+            raise ValueError(f"zone '{self.name}': proxy '{self.proxy}' is not one of its lights")
+        self.fps: float = float(cfg.get("fps") or 20)
+        self.ddp_port: int = int(cfg.get("ddp_port") or (4048 + index))
+        self.idle_timeout_s: float = float(cfg.get("idle_timeout_s") or 30)
+        self.auto_start: bool = bool(cfg.get("auto_start", True))
+        self.pause_entities: list[str] = list(cfg.get("pause_entities") or [])
+        self.brightness_scale: float = float(cfg.get("brightness_scale") or 1.0)
+
+    @property
+    def switch_command_topic(self) -> str:
+        return f"{BASE_TOPIC}/{self.slug}/set"
+
+    @property
+    def switch_state_topic(self) -> str:
+        return f"{BASE_TOPIC}/{self.slug}/state"
+
+
+class DdpProtocol(asyncio.DatagramProtocol):
+    """Keeps only the newest frame - the zone ticker samples latest-wins."""
+
+    def __init__(self, pixel_count: int, on_activity):
+        self.pixel_count = pixel_count
+        self.on_activity = on_activity
+        self.latest: list[tuple[int, int, int]] | None = None
+        self.last_rx = 0.0
+        self.frames_rx = 0
+
+    def datagram_received(self, data: bytes, addr) -> None:
+        if len(data) < 10 + self.pixel_count * 3:
+            return
+        body = data[10 : 10 + self.pixel_count * 3]
+        px = range(self.pixel_count)
+        self.latest = [(body[i * 3], body[i * 3 + 1], body[i * 3 + 2]) for i in px]
+        self.last_rx = time.monotonic()
+        self.frames_rx += 1
+        self.on_activity()
+
+
+class ZoneRunner:
+    def __init__(self, zone: Zone, bridge: Bridge):
+        self.zone = zone
+        self.bridge = bridge
+        self.ddp: DdpProtocol | None = None
+        self.armed = False
+        self.counter = 0
+        self.saved_states: dict[str, dict | None] = {}
+        self._ticker: asyncio.Task | None = None
+        self._last_zig_send = 0.0
+        self._last_sent_frame: list[tuple[int, int, int]] | None = None
+
+    def on_ddp_activity(self) -> None:
+        if not self.armed and self.zone.auto_start:
+            self.bridge.schedule_arm(self.zone.slug, reason="ddp")
+
+    # -- lifecycle -------------------------------------------------------
+
+    async def arm(self) -> None:
+        if self.armed:
+            return
+        LOG.info(
+            "[%s] arming (%d lights, proxy=%s, %g fps)",
+            self.zone.name, len(self.zone.lights), self.zone.proxy, self.zone.fps,
+        )
+        self.saved_states = {fn: self.bridge.light_states.get(fn) for fn in self.zone.lights}
+        await self.bridge.set_pause_entities(self.zone, paused=True)
+        # Lights must be on to render; turn them on without disturbing color.
+        for fn in self.zone.lights:
+            prev = self.saved_states.get(fn)
+            if not prev or prev.get("state") != "ON":
+                await self.bridge.publish(f"{Z2M_BASE}/{fn}/set", json.dumps({"state": "ON"}))
+        await asyncio.sleep(0.3)
+        await self._arm_ritual()
+        self.armed = True
+        self._last_zig_send = 0.0
+        self._last_sent_frame = None
+        await self.bridge.publish(self.zone.switch_state_topic, "ON", retain=True)
+        self._ticker = asyncio.create_task(self._run_ticker())
+
+    async def _arm_ritual(self) -> None:
+        """Stop-all, then per light: attribute write + sequence sync."""
+        for fn in self.zone.lights:
+            await self.bridge.publish(f"{Z2M_BASE}/{fn}/set", protocol.sync_payload(self.counter))
+            await asyncio.sleep(0.05)
+        await asyncio.sleep(0.3)
+        for fn in self.zone.lights:
+            await self.bridge.publish(f"{Z2M_BASE}/{fn}/set", protocol.arm_write_payload())
+            await asyncio.sleep(0.15)
+            await self.bridge.publish(f"{Z2M_BASE}/{fn}/set", protocol.sync_payload(self.counter))
+            await asyncio.sleep(0.15)
+
+    async def disarm(self) -> None:
+        if not self.armed:
+            return
+        LOG.info("[%s] disarming", self.zone.name)
+        self.armed = False
+        if self._ticker:
+            self._ticker.cancel()
+            self._ticker = None
+        try:
+            await self._send_black()
+            await asyncio.sleep(0.3)
+            for fn in self.zone.lights:
+                topic = f"{Z2M_BASE}/{fn}/set"
+                await self.bridge.publish(topic, protocol.sync_payload(self.counter))
+                await asyncio.sleep(0.05)
+            await self._restore_states()
+        finally:
+            await self.bridge.set_pause_entities(self.zone, paused=False)
+            await self.bridge.publish(self.zone.switch_state_topic, "OFF", retain=True)
+
+    async def _send_black(self) -> None:
+        records = []
+        for fn in self.zone.lights:
+            nwk = self.bridge.nwk.get(fn)
+            if nwk is not None:
+                records.append(protocol.light_record(nwk, 1, 1743, 1631))  # dim D65
+        if records:
+            self.counter += 1
+            await self.bridge.publish(
+                f"{Z2M_BASE}/{self.zone.proxy}/set",
+                protocol.stream_frame_payload(self.counter, 0x0100, records),
+            )
+
+    async def _restore_states(self) -> None:
+        for fn, prev in self.saved_states.items():
+            if prev is None:
+                continue
+            if prev.get("state") != "ON":
+                payload: dict = {"state": "OFF"}
+            else:
+                payload = {"state": "ON"}
+                if prev.get("brightness") is not None:
+                    payload["brightness"] = prev["brightness"]
+                if prev.get("color_mode") == "xy" and isinstance(prev.get("color"), dict):
+                    payload["color"] = {"x": prev["color"].get("x"), "y": prev["color"].get("y")}
+                elif prev.get("color_temp") is not None:
+                    payload["color_temp"] = prev["color_temp"]
+            await self.bridge.publish(f"{Z2M_BASE}/{fn}/set", json.dumps(payload))
+            await asyncio.sleep(0.05)
+
+    # -- streaming -------------------------------------------------------
+
+    async def _run_ticker(self) -> None:
+        interval = 1.0 / self.zone.fps
+        smoothing = protocol.smoothing_for_fps(self.zone.fps)
+        next_tick = time.monotonic()
+        try:
+            while self.armed:
+                now = time.monotonic()
+                if now < next_tick:
+                    await asyncio.sleep(next_tick - now)
+                next_tick = max(next_tick + interval, time.monotonic())
+
+                ddp = self.ddp
+                if ddp is None or ddp.latest is None:
+                    continue
+                idle_for = time.monotonic() - ddp.last_rx
+                if idle_for > self.zone.idle_timeout_s:
+                    LOG.info("[%s] no DDP for %.0fs - auto-disarming", self.zone.name, idle_for)
+                    asyncio.get_running_loop().create_task(self.disarm())
+                    return
+
+                frame = ddp.latest
+                fresh = frame != self._last_sent_frame
+                due_keepalive = time.monotonic() - self._last_zig_send >= KEEPALIVE_S
+                if not fresh and not due_keepalive:
+                    continue
+                # If the mode has expired (long send gap), re-arm before streaming.
+                if self._last_zig_send and time.monotonic() - self._last_zig_send > REARM_GAP_S:
+                    LOG.info("[%s] send gap > %.0fs - re-arming", self.zone.name, REARM_GAP_S)
+                    await self._arm_ritual()
+                await self._send_frame(frame, smoothing)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            LOG.exception("[%s] ticker crashed - disarming", self.zone.name)
+            asyncio.get_running_loop().create_task(self.disarm())
+
+    async def _send_frame(self, frame: list[tuple[int, int, int]], smoothing: int) -> None:
+        records = []
+        for i, fn in enumerate(self.zone.lights):
+            nwk = self.bridge.nwk.get(fn)
+            if nwk is None:
+                continue
+            r, g, b = frame[i] if i < len(frame) else frame[-1]
+            bri, x12, y12 = color.rgb8_to_entertainment(
+                r, g, b, brightness_scale=self.zone.brightness_scale
+            )
+            records.append(protocol.light_record(nwk, bri, x12, y12))
+        if not records:
+            return
+        self.counter += 1
+        await self.bridge.publish(
+            f"{Z2M_BASE}/{self.zone.proxy}/set",
+            protocol.stream_frame_payload(self.counter, smoothing, records),
+        )
+        self._last_zig_send = time.monotonic()
+        self._last_sent_frame = list(frame)
+
+
+class Bridge:
+    def __init__(self, zones: list[Zone]):
+        self.zones = {z.slug: z for z in zones}
+        self.runners = {slug: ZoneRunner(zone, self) for slug, zone in self.zones.items()}
+        self.nwk: dict[str, int] = {}
+        self.light_states: dict[str, dict] = {}
+        self.client: aiomqtt.Client | None = None
+        self._pending_arms: set[str] = set()
+
+    async def publish(self, topic: str, payload: str, retain: bool = False) -> None:
+        if self.client is not None:
+            await self.client.publish(topic, payload, qos=0, retain=retain)
+
+    def schedule_arm(self, slug: str, reason: str) -> None:
+        if slug in self._pending_arms:
+            return
+        self._pending_arms.add(slug)
+
+        async def _do() -> None:
+            try:
+                await self.arm_zone(slug)
+            finally:
+                self._pending_arms.discard(slug)
+
+        asyncio.get_running_loop().create_task(_do())
+
+    async def arm_zone(self, slug: str) -> None:
+        # Only one zone streams at a time (single coordinator airtime budget,
+        # single proxy broadcast domain) - arming a zone stops the active one.
+        for other_slug, runner in self.runners.items():
+            if other_slug != slug and runner.armed:
+                LOG.info("zone '%s' requested while '%s' active - stopping it", slug, other_slug)
+                await runner.disarm()
+        missing = [fn for fn in self.zones[slug].lights if fn not in self.nwk]
+        if missing:
+            LOG.error(
+                "[%s] cannot arm - no network address for %s (renamed or not paired?)",
+                slug, missing,
+            )
+            await self.publish(self.zones[slug].switch_state_topic, "OFF", retain=True)
+            return
+        await self.runners[slug].arm()
+
+    # -- Home Assistant Core service calls (pause entities) --------------
+
+    async def set_pause_entities(self, zone: Zone, paused: bool) -> None:
+        if not zone.pause_entities:
+            return
+        token = os.environ.get("SUPERVISOR_TOKEN")
+        if not token:
+            LOG.warning("[%s] pause_entities set but no SUPERVISOR_TOKEN; skipping", zone.name)
+            return
+        service = "turn_off" if paused else "turn_on"
+
+        def _call() -> None:
+            body = json.dumps({"entity_id": zone.pause_entities}).encode()
+            req = urllib.request.Request(
+                f"http://supervisor/core/api/services/homeassistant/{service}",
+                data=body,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            )
+            urllib.request.urlopen(req, timeout=10)
+
+        try:
+            await asyncio.to_thread(_call)
+            LOG.info("[%s] %s: %s", zone.name, service, ", ".join(zone.pause_entities))
+        except Exception as exc:
+            LOG.warning("[%s] pause entity call failed: %s", zone.name, exc)
+
+    # -- MQTT ------------------------------------------------------------
+
+    async def publish_discovery(self) -> None:
+        device = {
+            "identifiers": ["hue_ent_bridge"],
+            "name": "Hue Entertainment",
+            "manufacturer": "adamoberley/ha-addons",
+            "model": "LedFX Zigbee streaming bridge",
+        }
+        for zone in self.zones.values():
+            config = {
+                "name": f"Entertainment: {zone.name}",
+                "unique_id": f"hue_ent_{zone.slug}",
+                "command_topic": zone.switch_command_topic,
+                "state_topic": zone.switch_state_topic,
+                "availability_topic": AVAILABILITY_TOPIC,
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "icon": "mdi:track-light",
+                "device": device,
+            }
+            await self.publish(
+                f"{DISCOVERY_PREFIX}/switch/hue_ent_{zone.slug}/config",
+                json.dumps(config),
+                retain=True,
+            )
+
+    def handle_message(self, topic: str, payload: bytes) -> None:
+        if topic == f"{Z2M_BASE}/bridge/devices":
+            try:
+                for dev in json.loads(payload):
+                    fn = dev.get("friendly_name")
+                    if fn and dev.get("network_address") is not None:
+                        self.nwk[fn] = dev["network_address"]
+                LOG.info("device list updated (%d addresses)", len(self.nwk))
+            except Exception:
+                LOG.exception("failed to parse bridge/devices")
+            return
+        for zone in self.zones.values():
+            if topic == zone.switch_command_topic:
+                want_on = payload.decode(errors="replace").strip().upper() == "ON"
+                if want_on:
+                    self.schedule_arm(zone.slug, reason="switch")
+                else:
+                    asyncio.get_running_loop().create_task(self.runners[zone.slug].disarm())
+                return
+            for fn in zone.lights:
+                if topic == f"{Z2M_BASE}/{fn}":
+                    runner = self.runners[zone.slug]
+                    if not runner.armed:  # don't let mid-stream reports pollute the snapshot
+                        with contextlib.suppress(Exception):
+                            self.light_states[fn] = json.loads(payload)
+
+    async def run(self) -> None:
+        # One DDP listener per zone, up-front (ports are static config).
+        loop = asyncio.get_running_loop()
+        for zone in self.zones.values():
+            runner = self.runners[zone.slug]
+            _transport, proto = await loop.create_datagram_endpoint(
+                lambda z=zone, r=runner: DdpProtocol(len(z.lights), r.on_ddp_activity),
+                local_addr=("0.0.0.0", zone.ddp_port),
+            )
+            runner.ddp = proto
+            LOG.info(
+                "[%s] DDP listener on :%d (%d px, %g fps)",
+                zone.name, zone.ddp_port, len(zone.lights), zone.fps,
+            )
+
+        host = os.environ.get("MQTT_HOST", "127.0.0.1")
+        port = int(os.environ.get("MQTT_PORT", "1883"))
+        user = os.environ.get("MQTT_USER") or None
+        password = os.environ.get("MQTT_PASS") or None
+        will = aiomqtt.Will(AVAILABILITY_TOPIC, "offline", qos=0, retain=True)
+        while True:
+            try:
+                async with aiomqtt.Client(
+                    host, port, username=user, password=password,
+                    will=will, identifier="hue_ent_bridge",
+                ) as client:
+                    self.client = client
+                    LOG.info("connected to MQTT %s:%d", host, port)
+                    await client.subscribe(f"{Z2M_BASE}/bridge/devices")
+                    for zone in self.zones.values():
+                        await client.subscribe(zone.switch_command_topic)
+                        for fn in zone.lights:
+                            await client.subscribe(f"{Z2M_BASE}/{fn}")
+                    await self.publish_discovery()
+                    await self.publish(AVAILABILITY_TOPIC, "online", retain=True)
+                    async for message in client.messages:
+                        self.handle_message(str(message.topic), bytes(message.payload))
+            except aiomqtt.MqttError as exc:
+                self.client = None
+                for runner in self.runners.values():
+                    runner.armed = False  # tickers stop; bulbs time out of mode on their own
+                LOG.warning("MQTT connection lost (%s); reconnecting in 5s", exc)
+                await asyncio.sleep(5)
+
+    async def shutdown(self) -> None:
+        for runner in self.runners.values():
+            if runner.armed:
+                await runner.disarm()
+        await self.publish(AVAILABILITY_TOPIC, "offline", retain=True)
+
+
+async def async_main() -> None:
+    options = load_options()
+    logging.basicConfig(
+        level=getattr(logging, str(options.get("log_level", "info")).upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    zones = [Zone(cfg, i) for i, cfg in enumerate(options.get("zones", []))]
+    if not zones:
+        LOG.warning("no zones configured - add zones in the app configuration; idling")
+        while True:
+            await asyncio.sleep(3600)
+    bridge = Bridge(zones)
+    try:
+        await bridge.run()
+    finally:
+        await bridge.shutdown()
+
+
+def main() -> None:
+    with contextlib.suppress(KeyboardInterrupt):
+        asyncio.run(async_main())
+
+
+if __name__ == "__main__":
+    main()
