@@ -1,5 +1,13 @@
 # Changelog
 
+## Hue Entertainment 0.3.0 — 2026-07-02
+
+Zero-config setup: zones now build themselves from your Home Assistant rooms
+(color Hue bulbs grouped by area, Adaptive Lighting switch auto-detected), and
+a new sidebar panel handles the human parts — pixel order with a per-bulb
+Blink identifier, proxy choice, fps/brightness, enable toggles, and a
+test-stream button. Edits apply live.
+
 ## Hue Entertainment 0.2.0 — 2026-07-02
 
 LedFX auto-provisioning: the app now creates one matching DDP device per zone

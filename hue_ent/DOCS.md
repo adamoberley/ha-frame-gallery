@@ -14,15 +14,46 @@ Bulbs interpolate between targets, so 20–25 fps looks continuous.
 - Color-capable Philips Hue bulbs on recent firmware, paired to zigbee2mqtt.
 - The LedFX app (or any DDP sender) running on the same host network.
 
-## Zones
+## Zones — automatic
 
-A zone is a group of up to **10** bulbs driven together (a hard limit of the
-Zigbee frame format). Configure one zone per room:
+Zones build themselves: on start the app groups your **color-capable Philips
+Hue bulbs by Home Assistant area** — one zone per room — and even picks up each
+room's Adaptive Lighting switch as a pause entity. A zone is capped at **10**
+bulbs (a hard limit of the Zigbee frame format); white-ambiance-only bulbs are
+skipped automatically.
+
+Then open the **sidebar panel** to fine-tune the parts only you can know:
+
+- **Pixel order** — effects sweep 1 → N across the room, so order the lights
+  along the room. Hit **Blink** on any row to identify which bulb it is, and
+  use ↑/↓ to reorder.
+- **Proxy** — the bulb that receives the stream and re-broadcasts it to the
+  rest. Every other bulb in the zone must be in direct radio range of it, so
+  pick a central, always-powered bulb.
+- **Target fps** — 20 is a good default; 25 is the practical ceiling (also the
+  rate a real Hue Bridge streams at). Lower still looks smooth.
+- **Brightness** — a global dimmer for the streamed output.
+- **Pause while streaming** — entities turned **off** while the zone streams
+  and back **on** afterwards (your room's Adaptive Lighting switch is
+  pre-filled when it can be detected; without it, adaptive lighting will fight
+  the stream).
+- **Enabled** — untick rooms you never want to stream.
+- **Test stream** — arms the zone right there so you can check it end to end.
+
+Changes save to the app's data folder, apply instantly (no restart), and update
+the matching LedFX device. **Rescan rooms** picks up newly paired bulbs or area
+changes. Each zone's DDP port is assigned once and remembered, so LedFX devices
+never churn when rooms change.
+
+### Manual zones (advanced)
+
+Set `auto_zones: false` (or add zones alongside — a manual zone with the same
+name replaces the auto one) and define everything in the app configuration:
 
 ```yaml
 zones:
   - name: Living Room
-    lights:
+    lights:            # zigbee2mqtt friendly names, in pixel order
       - hue_living_room_bulb_1
       - hue_living_room_bulb_2
       - hue_living_room_floor_lamp
@@ -31,25 +62,10 @@ zones:
     ddp_port: 4048
     auto_start: true
     idle_timeout_s: 30
+    brightness_scale: 1.0
     pause_entities:
       - switch.adaptive_lighting_living_room
 ```
-
-- **lights** — zigbee2mqtt *friendly names*, in pixel order. Arrange them along
-  the room so LedFX's one-dimensional effects sweep spatially.
-- **proxy** — the bulb that receives the stream and re-broadcasts it. Every
-  other bulb in the zone must be in direct radio range of it. Pick a central,
-  always-powered bulb. Defaults to the first light.
-- **fps** — 20 is a good default; 25 is the practical ceiling (it is also the
-  rate a real Hue Bridge streams at). Lower values still look smooth.
-- **ddp_port** — the UDP port this zone listens on for DDP. Each zone needs its
-  own. Defaults to 4048 + zone index.
-- **auto_start** — arm automatically when DDP frames arrive (default on). The
-  zone always disarms itself after `idle_timeout_s` without frames.
-- **pause_entities** — entities turned **off** while the zone streams and back
-  **on** afterwards. Put your room's Adaptive Lighting switch here, otherwise
-  it will fight the stream.
-- **brightness_scale** — global dimmer for the streamed output (0.05–1.0).
 
 ## LedFX setup
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0 — 2026-07-02
+
+- **Auto zones**: color-capable Hue bulbs are grouped by Home Assistant area —
+  one zone per room, with the room's Adaptive Lighting switch auto-detected as
+  a pause entity. Zero-config first run.
+- **Sidebar zone editor** (ingress): reorder lights into pixel order with a
+  per-bulb **Blink** identifier, pick the proxy, set fps/brightness, enable or
+  disable rooms, and test-stream a zone — changes apply live, no restart.
+- DDP ports are allocated once per zone and remembered, so LedFX devices never
+  churn when rooms change. New option: `auto_zones` (default on); manual
+  `zones:` still supported and win on name collision.
+
 ## 0.2.0 — 2026-07-02
 
 - **LedFX auto-provisioning**: the app now creates one matching DDP device per
