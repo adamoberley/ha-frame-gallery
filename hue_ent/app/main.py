@@ -22,7 +22,7 @@ import urllib.request
 
 import aiomqtt
 
-from . import color, protocol
+from . import color, ledfx, protocol
 
 LOG = logging.getLogger("hue_ent")
 
@@ -478,8 +478,22 @@ async def async_main() -> None:
     main_task = asyncio.current_task()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, main_task.cancel)
-    with contextlib.suppress(asyncio.CancelledError):
-        await bridge.run()
+
+    # Auto-provision matching DDP devices in LedFX (set ledfx_url: "" to opt out).
+    provision_task: asyncio.Task | None = None
+    ledfx_url = str(options.get("ledfx_url", "http://127.0.0.1:8888") or "").strip()
+    ledfx_target = str(options.get("ledfx_ddp_target") or "127.0.0.1").strip()
+    if ledfx_url:
+        provision_task = asyncio.ensure_future(
+            ledfx.provision_forever(ledfx_url, ledfx_target, zones)
+        )
+
+    try:
+        with contextlib.suppress(asyncio.CancelledError):
+            await bridge.run()
+    finally:
+        if provision_task is not None and not provision_task.done():
+            provision_task.cancel()
 
 
 def main() -> None:

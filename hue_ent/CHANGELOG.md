@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 — 2026-07-02
+
+- **LedFX auto-provisioning**: the app now creates one matching DDP device per
+  zone in LedFX via its API (named `Hue <zone>`, right port/pixel count/fps) —
+  configure zones once, pick effects in LedFX, done. Idempotent; devices that
+  drift from their zone config are recreated. New options: `ledfx_url`
+  (empty = off) and `ledfx_ddp_target` for remote setups.
+
 ## 0.1.0 — 2026-07-02
 
 Initial release.

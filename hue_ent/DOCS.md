@@ -53,17 +53,27 @@ zones:
 
 ## LedFX setup
 
-For each zone, add a **DDP** device in LedFX:
-
-- *IP address*: the Home Assistant host address (both apps use host networking,
-  so `127.0.0.1` works when LedFX runs on the same box).
-- *Port*: the zone's `ddp_port`.
-- *Pixel count*: the zone's number of lights.
-- *Refresh rate*: match the zone's `fps`.
-
-Then play any effect on that device. With `auto_start` on, the zone arms as
+**Automatic.** On start the app creates one matching **DDP** device per zone in
+LedFX through its API — named **Hue \<zone\>**, with the right port, pixel
+count, and frame rate — so there is nothing to mirror by hand. Just open LedFX
+and put an effect on the zone's device. With `auto_start` on, the zone arms as
 soon as frames flow and releases the lights after `idle_timeout_s` (default
 30 s) once they stop.
+
+Details and knobs:
+
+- `ledfx_url` (default `http://127.0.0.1:8888`, the LedFX app on the same
+  host) — set it to a remote LedFX instance, or to an **empty string** to
+  disable auto-provisioning and manage devices yourself.
+- `ledfx_ddp_target` (default `127.0.0.1`) — the address LedFX sends pixels
+  to, i.e. where this app runs. Only change it if LedFX runs on a different
+  machine.
+- Provisioning is idempotent: a device that already matches its zone is left
+  untouched (effect included). If you change a zone's lights, port, or fps, its
+  LedFX device is recreated to match — re-pick the effect afterwards.
+- If you remove a zone, delete its old `Hue <zone>` device in LedFX yourself.
+- Managing devices manually instead: any DDP sender works — point it at the
+  zone's `ddp_port` with pixel count = number of lights.
 
 ## Home Assistant control
 
