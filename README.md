@@ -142,6 +142,10 @@ special coordinator firmware.
   plain TI CC2652.
 - **Per-room zones** — up to 10 bulbs each (the Zigbee frame limit). Each zone gets
   its own DDP input and target frame rate.
+- **Zones build themselves** — color Hue bulbs are grouped by HA area into one
+  zone per room (Adaptive Lighting switch auto-detected too); a **sidebar panel**
+  handles the human parts: pixel order with a per-bulb *Blink* identifier, proxy
+  choice, brightness, and per-room enable toggles. Edits apply live.
 - **HA-native & tidy** — one **Hue Entertainment \<zone\>** switch per zone via MQTT
   discovery. Arming captures each bulb's state and **pauses your Adaptive Lighting**
   for that room; disarming **restores every bulb** to exactly where it was. Auto-arms

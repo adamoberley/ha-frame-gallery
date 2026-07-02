@@ -4,6 +4,13 @@ configuration:
     description: >-
       App log verbosity. 'debug' logs every state transition - use it only when
       troubleshooting.
+  auto_zones:
+    name: Auto zones
+    description: >-
+      Build one zone per Home Assistant area from your color-capable Philips
+      Hue bulbs, with the room's Adaptive Lighting switch auto-detected as a
+      pause entity. Fine-tune everything in the sidebar panel. Turn off to
+      define all zones manually below.
   ledfx_url:
     name: LedFX URL
     description: >-

@@ -7,7 +7,7 @@
 # entertainment commands aimed at one "proxy" bulb per zone, which re-broadcasts
 # to the rest. Requires zigbee2mqtt >= 2.1.1 and color-capable Hue bulbs.
 name: Hue Entertainment
-version: "0.2.0"
+version: "0.3.0"
 slug: hue_ent
 description: >-
   Audio-reactive Hue: stream LedFX effects to Philips Hue Zigbee bulbs on
@@ -21,6 +21,13 @@ arch:
 init: false
 startup: application
 boot: auto
+
+# Sidebar zone editor: rooms are auto-discovered; the GUI handles the human
+# parts (pixel order with per-bulb blink, proxy choice, brightness, enable).
+ingress: true
+ingress_port: 8127
+panel_icon: mdi:track-light
+panel_title: Hue Entertainment
 
 # host_network so the LedFX app (also host_network) can reach the per-zone DDP
 # UDP listeners directly on the host address.
@@ -36,6 +43,7 @@ homeassistant_api: true
 
 options:
   log_level: info
+  auto_zones: true
   ledfx_url: "http://127.0.0.1:8888"
   ledfx_ddp_target: "127.0.0.1"
   zones: []
@@ -43,6 +51,12 @@ options:
 schema:
   # App log verbosity.
   log_level: list(debug|info|warning|error)
+  # Build zones automatically: color-capable Philips Hue bulbs are grouped by
+  # their Home Assistant area (one zone per room), and each room's Adaptive
+  # Lighting switch is picked up as a pause entity. Fine-tune (pixel order,
+  # proxy, brightness, enable/disable) in the sidebar panel. Disable to define
+  # every zone by hand below.
+  auto_zones: bool
   # LedFX API base URL for auto-provisioning: the app creates one matching DDP
   # device per zone in LedFX (named "Hue <zone>"), so there's nothing to mirror
   # by hand. The default reaches the LedFX app on the same host. Set it to an
@@ -51,7 +65,9 @@ schema:
   # The address LedFX should send DDP to - i.e. where THIS app is reachable
   # from LedFX. Leave at 127.0.0.1 when both apps run on the same host.
   ledfx_ddp_target: str
-  # One entry per entertainment zone. Lights are zigbee2mqtt friendly names, in
+  # MANUAL zones (advanced; not needed when auto_zones covers you - a manual
+  # zone with the same name as a room replaces the auto one). Lights are
+  # zigbee2mqtt friendly names, in
   # pixel order (arrange them along the room so 1-D effects sweep spatially).
   # A zone is capped at 10 lights by the Zigbee frame format. The proxy bulb
   # re-broadcasts frames and must be in radio range of every other bulb in the
