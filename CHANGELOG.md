@@ -6,7 +6,7 @@ New app: stream LedFX effects to Philips Hue Zigbee bulbs on zigbee2mqtt at
 20–25 fps — no Hue Bridge — via the reverse-engineered Hue Entertainment
 protocol (one Zigbee frame per zone per tick through Z2M's `zclcommand`
 passthrough, re-broadcast by a proxy bulb). Per-room zones (up to 10 bulbs),
-one `Entertainment: <zone>` switch each, automatic start/stop around the DDP
+one `Hue Entertainment <zone>` switch each, automatic start/stop around the DDP
 stream, Adaptive Lighting pause/resume, and full bulb-state restore.
 
 ## REFRAMED Gallery 0.5.0 — 2026-06-25
